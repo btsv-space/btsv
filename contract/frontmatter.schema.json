@@ -1,0 +1,53 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://github.com/btsv/btsv/contract/frontmatter.schema.json",
+	"title": "btsv Post Frontmatter",
+	"description": "Canonical frontmatter schema shared by the editor and all builder templates. additionalProperties is false for strict typing — custom fields are still captured by the editor's parser (extractExtra) during content ingestion.",
+	"type": "object",
+	"properties": {
+		"title": {
+			"type": "string",
+			"description": "Post title. Required."
+		},
+		"dateCreated": {
+			"type": "string",
+			"format": "date",
+			"description": "Original creation date in YYYY-MM-DD format. Set once when the post is first created. Required."
+		},
+		"dateUpdated": {
+			"type": "string",
+			"format": "date",
+			"description": "Last modification date in YYYY-MM-DD format. Updated every time the post is saved. Required."
+		},
+		"datePublished": {
+			"type": "string",
+			"format": "date",
+			"description": "Publication date in YYYY-MM-DD format. Set once when the post is first published (draft becomes false). Optional — user-editable for backdating."
+		},
+		"description": {
+			"type": "string",
+			"description": "Short description for SEO, social previews, and post listings."
+		},
+		"tags": {
+			"type": "array",
+			"items": { "type": "string" },
+			"default": [],
+			"description": "List of tags. Generates /tags/<name> listing pages."
+		},
+		"draft": {
+			"type": "boolean",
+			"default": false,
+			"description": "If true, the post is excluded from production builds."
+		},
+		"id": {
+			"type": "string",
+			"description": "Internal post identifier (timestamp in YYYYMMDD-HHMMSSmm format). Auto-generated, do not edit."
+		},
+		"slug": {
+			"type": "string",
+			"description": "URL slug for the published post. Auto-derived from title. Can be overridden. Required for publishing."
+		}
+	},
+	"required": ["title", "dateCreated", "dateUpdated"],
+	"additionalProperties": false
+}

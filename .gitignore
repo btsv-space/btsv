@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+apps/web/build/
+apps/web/.svelte-kit/
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+apps/api/data/
+apps/api/tmp/
+apps/api/bin/
+apps/proxy/bin/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Certificates
+.certs/
+
+# Todo
+TODO
+
+# env
+.env*

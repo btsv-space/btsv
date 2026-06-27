@@ -1,0 +1,4 @@
+[submodule "builder-templates/btsv-template-astro"]
+	path = builder-templates/btsv-template-astro
+	url = https://github.com/btsv-space/btsv-template-astro
+	branch = main
