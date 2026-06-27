@@ -64,9 +64,13 @@
 </script>
 
 {#if !isAuthenticated.value}
-  <a href="/login" class="font-semibold text-lg no-underline text-foreground"
-    >btsv</a
-  >
+  <a href="/login" class="no-underline">
+    <img
+      src="/icons/logo_bot_no_border.svg"
+      class="h-5 dark:invert"
+      alt="btsv"
+    />
+  </a>
 {:else}
   <div class="relative">
     <button
