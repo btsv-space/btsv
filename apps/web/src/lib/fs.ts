@@ -73,6 +73,21 @@ export async function deletePostFile(
   await fs.promises.unlink(fullPath).catch(() => {});
 }
 
+export async function postFileExists(
+  projectId: string,
+  postId: string,
+): Promise<boolean> {
+  try {
+    const fs = await getFS();
+    const dir = getDir(projectId);
+    const fullPath = `${dir}/${getPostPath(postId)}`;
+    await fs.promises.stat(fullPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function checkProjectDirExists(
   projectId: string,
 ): Promise<boolean> {

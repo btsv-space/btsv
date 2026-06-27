@@ -4,13 +4,26 @@
   import favicon from "$lib/assets/favicon.svg";
   import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
   import { Bolt } from "@lucide/svelte";
-  import { goto } from "$app/navigation";
+  import { goto, preloadCode } from "$app/navigation";
   import ProjectNav from "$lib/components/ProjectNav.svelte";
+  import ReloadPrompt from "$lib/components/ReloadPrompt.svelte";
 
   let { children } = $props();
+  let preloaded = false;
 
   $effect(() => {
     ensureInit();
+  });
+
+  $effect(() => {
+    if (isAuthenticated.value && !preloaded) {
+      preloaded = true;
+      preloadCode("/");
+      preloadCode("/projects");
+      preloadCode("/settings");
+      preloadCode("/__preload_project");
+      preloadCode("/__preload_project/__preload_post");
+    }
   });
 
   onMount(() => {
@@ -18,6 +31,7 @@
     const update = () =>
       document.documentElement.classList.toggle("dark", m.matches);
     m.addEventListener("change", update);
+
     return () => m.removeEventListener("change", update);
   });
 </script>
@@ -38,6 +52,8 @@
     {/if}
   </nav>
 </header>
+
+<ReloadPrompt />
 
 <main class="max-w-240 mx-auto p-4">
   {@render children()}

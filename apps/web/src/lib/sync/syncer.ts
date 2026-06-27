@@ -4,6 +4,7 @@ import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { commitTimestamp } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
+import { postFileExists } from "$lib/fs";
 import {
   SyncState,
   type IProject,
@@ -130,11 +131,18 @@ export class Syncer {
       const adapter = await createSyncAdapter(project, prefs);
       let allOk = true;
       let anyPublished = false;
-      let lastToken = "";
+      let lastToken: string | null = null;
 
       for (const post of dirty) {
         try {
           const token = await ensureGitToken(projectId);
+          if (!token) {
+            console.warn(`[syncer] no git token for ${projectId}, skipping`);
+            this.config.onStateChange?.(projectId, SyncState.ERROR);
+            this.config.onError?.(projectId, "No git token available");
+            allOk = false;
+            continue;
+          }
           lastToken = token;
 
           const dates = computeSaveDates(post);
@@ -195,11 +203,19 @@ export class Syncer {
     const post = await dbGetPost(project.id, postId);
     const wasPublished = post && !post.draft;
 
+    const existsOnDisk = await postFileExists(project.id, postId);
+    if (!existsOnDisk) {
+      await dbDeletePost(project.id, postId);
+      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+      return;
+    }
+
     const prefs = this.config.getPrefs();
     const token = await ensureGitToken(project.id);
     if (!token) {
       console.error(`[syncer] no git token for deletion of ${postId}`);
       await dbDeletePost(project.id, postId);
+      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
       return;
     }
 

@@ -101,10 +101,15 @@
   async function handleDelete() {
     showDeleteConfirm = false;
     saver?.cancel();
-    const wp = workingPost;
-    workingPost = null;
-    if (wp) await deletePost(projectId, postId);
-    goto(`/${projectId}`);
+    try {
+      await deletePost(projectId, postId);
+      goto(`/${projectId}`);
+    } catch (err) {
+      saveError = {
+        title: "Delete Failed",
+        message: err instanceof Error ? err.message : "Failed to delete post",
+      };
+    }
   }
 
   onMount(async () => {

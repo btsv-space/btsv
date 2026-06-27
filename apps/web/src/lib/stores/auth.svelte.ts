@@ -17,18 +17,25 @@ export const dek = $state<{ value: Uint8Array | null }>({ value: null });
 
 export const gitTokenCache = new SvelteMap<string, string>();
 
-export async function ensureGitToken(projectId: string): Promise<string> {
+export async function ensureGitToken(
+  projectId: string,
+): Promise<string | null> {
   if (gitTokenCache.has(projectId)) {
     return gitTokenCache.get(projectId)!;
   }
 
-  const result = await api.projects.getSecret(projectId);
-  const dekVal = getDEK();
-  const ciphertext = bytesFromApi(result.ciphertext);
-  const iv = bytesFromApi(result.iv);
-  const token = await decryptToken(ciphertext, iv, dekVal);
-  gitTokenCache.set(projectId, token);
-  return token;
+  try {
+    const result = await api.projects.getSecret(projectId);
+    const dekVal = getDEK();
+    const ciphertext = bytesFromApi(result.ciphertext);
+    const iv = bytesFromApi(result.iv);
+    const token = await decryptToken(ciphertext, iv, dekVal);
+    gitTokenCache.set(projectId, token);
+    return token;
+  } catch (err) {
+    console.warn(`[auth] failed to fetch git token for ${projectId}:`, err);
+    return null;
+  }
 }
 
 let initPromise: Promise<void> | null = null;

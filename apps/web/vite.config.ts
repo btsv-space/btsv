@@ -1,6 +1,7 @@
 import fs from "fs";
 import tailwindcss from "@tailwindcss/vite";
 import { sveltekit } from "@sveltejs/kit/vite";
+import { SvelteKitPWA } from "@vite-pwa/sveltekit";
 import { defineConfig } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
@@ -20,5 +21,41 @@ export default defineConfig({
       include: ["buffer"],
     }),
     sveltekit(),
+    SvelteKitPWA({
+      registerType: "prompt",
+      manifest: {
+        name: "btsv",
+        short_name: "btsv",
+        description: "Local-first markdown+ editor with git sync",
+        theme_color: "#ffffff",
+        background_color: "#ffffff",
+        display: "standalone",
+        start_url: "/",
+        icons: [
+          {
+            src: "/icons/192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "/icons/512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "/icons/maskable.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        navigateFallback: "/",
+        navigateFallbackDenylist: [/^\/api\//],
+        clientsClaim: true,
+      },
+    }),
   ],
 });
