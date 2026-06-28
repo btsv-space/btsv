@@ -230,7 +230,12 @@ export class GitAdapter implements ISyncAdapter {
     }
   }
 
-  async pull(projectId: string, gitToken: string): Promise<IPostEntry[]> {
+  async pull(
+    projectId: string,
+    gitToken: string,
+    _storedRemoteSha?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
+    _headSha?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
+  ): Promise<IPostEntry[]> {
     const git = await import("isomorphic-git");
     const { default: http } = await import("isomorphic-git/http/web");
     const fs = await getFS();
@@ -238,6 +243,15 @@ export class GitAdapter implements ISyncAdapter {
     const dir = getDir(projectId);
 
     const gitRepoExists = await dirExists(fs, `${dir}/.git`);
+
+    let preIds: Set<string> = new Set();
+    if (gitRepoExists) {
+      try {
+        preIds = new Set((await readPostFiles(fs, dir, true)).map((e) => e.id));
+      } catch (err) {
+        console.debug("[git] pre-pull id snapshot failed:", err);
+      }
+    }
 
     if (!gitRepoExists) {
       await ensureDirChain(fs, dir);
@@ -279,7 +293,18 @@ export class GitAdapter implements ISyncAdapter {
 
     await ensureRepoHasCommit(fs, dir, git);
 
-    return readPostFiles(fs, dir);
+    const entries = await readPostFiles(fs, dir);
+
+    if (preIds.size > 0) {
+      const postIds = new Set(entries.map((e) => e.id));
+      for (const id of preIds) {
+        if (!postIds.has(id)) {
+          entries.push({ id, deleted: true });
+        }
+      }
+    }
+
+    return entries;
   }
 
   async commitAndPush(
@@ -439,6 +464,7 @@ async function ensureRepoHasCommit(
 async function readPostFiles(
   fs: Awaited<ReturnType<typeof getFS>>,
   dir: string,
+  idOnly = false,
 ): Promise<IPostEntry[]> {
   const entries: IPostEntry[] = [];
 
@@ -466,8 +492,15 @@ async function readPostFiles(
         const relative = full.replace(`${dir}/`, "");
         if (relative.includes("/")) {
           const id = relative.split("/").pop()!.replace(POST_EXT, "");
-          const content = (await fs.promises.readFile(full, "utf8")) as string;
-          entries.push({ id, content });
+          if (idOnly) {
+            entries.push({ id });
+          } else {
+            const content = (await fs.promises.readFile(
+              full,
+              "utf8",
+            )) as string;
+            entries.push({ id, content });
+          }
         }
       }
     }

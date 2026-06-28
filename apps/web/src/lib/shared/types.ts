@@ -42,7 +42,8 @@ export interface IUserPreferences {
 
 export interface IPostEntry {
   id: string;
-  content: string;
+  content?: string;
+  deleted?: boolean;
 }
 
 export interface IRemoteCheckResult {
@@ -64,7 +65,12 @@ export interface ISyncAdapter {
     gitToken: string,
     storedRemoteSha?: string,
   ): Promise<IRemoteCheckResult>;
-  pull(projectId: string, gitToken: string): Promise<IPostEntry[]>;
+  pull(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+    headSha?: string,
+  ): Promise<IPostEntry[]>;
   initialPull(
     projectId: string,
     gitToken: string,

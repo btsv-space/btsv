@@ -30,6 +30,8 @@ function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   return { owner, repo };
 }
 
+class CompareBaseNotFoundError extends Error {}
+
 // TODO: consider whether to use SDK (e.g. @octokit/rest for GitHub)
 export class ApiAdapter implements ISyncAdapter {
   private owner: string;
@@ -163,7 +165,147 @@ export class ApiAdapter implements ISyncAdapter {
     }
   }
 
-  async pull(projectId: string, gitToken: string): Promise<IPostEntry[]> {
+  async pull(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+    headSha?: string,
+  ): Promise<IPostEntry[]> {
+    if (storedRemoteSha && headSha) {
+      try {
+        return await this.#pullViaCompare(
+          projectId,
+          gitToken,
+          storedRemoteSha,
+          headSha,
+        );
+      } catch (err) {
+        if (err instanceof CompareBaseNotFoundError) {
+          console.warn(
+            "[api] compare base sha not found, falling back to GraphQL pull",
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+    return this.#pullViaGraphQL(projectId, gitToken);
+  }
+
+  async #pullViaCompare(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha: string,
+    headSha: string,
+  ): Promise<IPostEntry[]> {
+    const compareRes = await fetch(
+      `https://api.github.com/repos/${this.owner}/${this.repo}/compare/${storedRemoteSha}...${headSha}`,
+      {
+        headers: {
+          Authorization: `Bearer ${gitToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      },
+    );
+
+    if (compareRes.status === 404) {
+      const body = await compareRes.text().catch(() => "");
+      throw new CompareBaseNotFoundError(
+        `compare base sha not found: 404 ${body}`,
+      );
+    }
+
+    if (compareRes.status === 403) {
+      const body = await compareRes.text().catch(() => "");
+      throw new Error(`GitHub compare API failed: 403 ${body}`);
+    }
+
+    if (!compareRes.ok) {
+      const body = await compareRes.text().catch(() => "");
+      throw new Error(
+        `GitHub compare API failed: ${compareRes.status} ${body}`,
+      );
+    }
+
+    const data = await compareRes.json();
+    const files: Array<{ filename: string; status: string }> =
+      data?.files ?? [];
+
+    return this.#processCompareFiles(files, projectId, headSha, gitToken);
+  }
+
+  async #processCompareFiles(
+    files: Array<{ filename: string; status: string }>,
+    projectId: string,
+    headSha: string,
+    gitToken: string,
+  ): Promise<IPostEntry[]> {
+    const removedEntries: IPostEntry[] = [];
+    const fetchJobs: Array<{ id: string; filename: string }> = [];
+
+    for (const file of files) {
+      if (!file.filename.endsWith(POST_EXT)) continue;
+      const id = file.filename.split("/").pop()!.replace(POST_EXT, "");
+
+      if (file.status === "removed") {
+        try {
+          await deletePostFile(projectId, id);
+        } catch (err) {
+          console.debug(
+            `[api] deletePostFile (removed via compare) error, file may not exist:`,
+            err,
+          );
+        }
+        removedEntries.push({ id, deleted: true });
+        continue;
+      }
+
+      fetchJobs.push({ id, filename: file.filename });
+    }
+
+    const fetchedEntries = await Promise.all(
+      fetchJobs.map(async (job): Promise<IPostEntry | null> => {
+        const content = await this.#fetchFileContent(
+          job.filename,
+          headSha,
+          gitToken,
+        );
+        if (content === null) return null;
+        await writePostFile(projectId, job.id, content);
+        return { id: job.id, content };
+      }),
+    );
+
+    return [
+      ...removedEntries,
+      ...fetchedEntries.filter((e): e is IPostEntry => e !== null),
+    ];
+  }
+
+  async #fetchFileContent(
+    filepath: string,
+    ref: string,
+    gitToken: string,
+  ): Promise<string | null> {
+    const res = await fetch(
+      `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${filepath}?ref=${encodeURIComponent(ref)}`,
+      { headers: { Authorization: `Bearer ${gitToken}` } },
+    );
+    if (!res.ok) {
+      console.warn(
+        `[api] contents fetch failed for ${filepath}: ${res.status}`,
+      );
+      return null;
+    }
+    const data = await res.json();
+    if (typeof data.content !== "string") return null;
+    return b64Decode(data.content);
+  }
+
+  async #pullViaGraphQL(
+    projectId: string,
+    gitToken: string,
+  ): Promise<IPostEntry[]> {
     const query = `
 			query($owner: String!, $repo: String!, $expression: String!) {
 				repository(owner: $owner, name: $repo) {

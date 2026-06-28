@@ -192,6 +192,86 @@ describe("pull", () => {
     expect(mockPull).not.toHaveBeenCalled();
     expect(entries).toHaveLength(1);
   });
+
+  it("emits { deleted: true } entries for files removed by git.pull (Phase 2 parity)", async () => {
+    let existingFiles = ["post-1.mdx", "post-2.mdx", "post-3.mdx"];
+
+    mockPull.mockImplementation(async () => {
+      existingFiles = existingFiles.filter(
+        (f) => f !== "post-2.mdx" && f !== "post-3.mdx",
+      );
+    });
+
+    mockStat.mockImplementation((path: string) => {
+      if (path === `${PROJECT_DIR}/.git`)
+        return Promise.resolve({ isDirectory: () => true });
+      const matchingFile = existingFiles.find((f) => path.endsWith(f));
+      if (matchingFile) return Promise.resolve({ isDirectory: () => false });
+      return Promise.resolve({ isDirectory: () => true });
+    });
+    mockReaddir.mockImplementation((path: string) => {
+      if (path === PROJECT_DIR) return Promise.resolve(["src"]);
+      if (path === `${PROJECT_DIR}/src`) return Promise.resolve(["content"]);
+      if (path === `${PROJECT_DIR}/src/content`)
+        return Promise.resolve(["posts"]);
+      if (path === `${PROJECT_DIR}/src/content/posts`)
+        return Promise.resolve(existingFiles);
+      return Promise.reject(new Error("not found"));
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      const file = existingFiles.find((f) => path.endsWith(f));
+      if (file) return Promise.resolve(`content-${file.replace(".mdx", "")}`);
+      return Promise.reject(new Error("not found"));
+    });
+
+    const adapter = new GitAdapter("https://github.com/user/repo.git");
+    const entries = await adapter.pull("proj-1", "token-abc");
+
+    expect(mockPull).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: PROJECT_DIR, singleBranch: true }),
+    );
+    expect(mockClone).not.toHaveBeenCalled();
+    expect(entries).toHaveLength(3);
+    expect(entries).toContainEqual({
+      id: "post-1",
+      content: "content-post-1",
+    });
+    expect(entries).toContainEqual({ id: "post-2", deleted: true });
+    expect(entries).toContainEqual({ id: "post-3", deleted: true });
+  });
+
+  it("does not emit deleted entries when git.pull fails (no working-tree change)", async () => {
+    mockPull.mockRejectedValue(new Error("network failure"));
+    const mdxFiles = ["post-1.mdx", "post-2.mdx"];
+    mockStat.mockImplementation((path: string) => {
+      const isDir = !mdxFiles.some((f) => path.endsWith(f));
+      return Promise.resolve({ isDirectory: () => isDir });
+    });
+    mockReaddir.mockImplementation((path: string) => {
+      if (path === PROJECT_DIR) return Promise.resolve(["src"]);
+      if (path === `${PROJECT_DIR}/src`) return Promise.resolve(["content"]);
+      if (path === `${PROJECT_DIR}/src/content`)
+        return Promise.resolve(["posts"]);
+      if (path === `${PROJECT_DIR}/src/content/posts`)
+        return Promise.resolve(mdxFiles);
+      return Promise.reject(new Error("not found"));
+    });
+    mockReadFile.mockImplementation((path: string) => {
+      if (path.endsWith("post-1.mdx")) return Promise.resolve("content-1");
+      if (path.endsWith("post-2.mdx")) return Promise.resolve("content-2");
+      return Promise.reject(new Error("not found"));
+    });
+
+    const adapter = new GitAdapter("https://github.com/user/repo.git");
+    const entries = await adapter.pull("proj-1", "token-abc");
+
+    expect(mockPull).toHaveBeenCalled();
+    expect(entries).toEqual([
+      { id: "post-1", content: "content-1" },
+      { id: "post-2", content: "content-2" },
+    ]);
+    expect(entries.every((e) => !e.deleted)).toBe(true);
+  });
 });
 
 describe("commitAndPush", () => {

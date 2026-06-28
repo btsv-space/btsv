@@ -10,7 +10,7 @@ import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { commitTimestamp } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
-import { postFileExists } from "$lib/fs";
+import { postFileExists, deletePostFile } from "$lib/fs";
 import {
   SyncState,
   type IPostEntry,
@@ -97,7 +97,12 @@ export class Syncer {
         }
 
         this.#setStatus(project.id, SyncState.SYNCING_PULL);
-        const entries = await adapter.pull(project.id, token);
+        const entries = await adapter.pull(
+          project.id,
+          token,
+          project.storedRemoteSha,
+          headSha,
+        );
         console.log(`[syncer] adapter.pull returned ${entries.length} entries`);
 
         const records = await this.#parseAndSave(project.id, entries);
@@ -355,8 +360,24 @@ export class Syncer {
     entries: IPostEntry[],
   ): Promise<IPostRecord[]> {
     const records: IPostRecord[] = [];
-    for (const { id, content } of entries) {
+    for (const entry of entries) {
+      const { id, content, deleted } = entry;
+      let syncedPost: IPostRecord | undefined;
       try {
+        if (deleted) {
+          await dbDeletePost(projectId, id);
+          try {
+            await deletePostFile(projectId, id);
+          } catch (err) {
+            console.debug(
+              `[syncer] deletePostFile error during pulled-delete for ${id}:`,
+              err,
+            );
+          }
+          continue;
+        }
+        if (!content) continue;
+
         const { post } = parseMdx(content, id);
         const record: IPostRecord = {
           projectId,
@@ -384,9 +405,11 @@ export class Syncer {
 
         await dbSavePost(record);
         records.push(record);
-        this.#runAfterSyncHooks(projectId, record.id, record);
+        syncedPost = record;
       } catch (err) {
         console.error(`[syncer] failed to parse pulled post ${id}:`, err);
+      } finally {
+        this.#runAfterSyncHooks(projectId, syncedPost?.id ?? id, syncedPost);
       }
     }
     return records;

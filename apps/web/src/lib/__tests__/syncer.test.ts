@@ -7,6 +7,7 @@ const {
   mockGetDirtyPosts,
   mockSavePost,
   mockSaveProject,
+  mockDeletePost,
   mockGetPost,
   mockSerializeMdx,
   mockComputeSaveDates,
@@ -22,10 +23,13 @@ const {
   mockAdapterInitialPull,
   mockAdapterMergeToMain,
   mockCreateSyncAdapter,
+  mockPostFileExists,
+  mockDeletePostFile,
 } = vi.hoisted(() => ({
   mockGetDirtyPosts: vi.fn(),
   mockSavePost: vi.fn(),
   mockSaveProject: vi.fn(),
+  mockDeletePost: vi.fn(),
   mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
   mockComputeSaveDates: vi.fn(),
@@ -41,14 +45,21 @@ const {
   mockAdapterInitialPull: vi.fn(),
   mockAdapterMergeToMain: vi.fn(),
   mockCreateSyncAdapter: vi.fn(),
+  mockPostFileExists: vi.fn().mockResolvedValue(true),
+  mockDeletePostFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("$lib/db", () => ({
   dbGetDirtyPosts: mockGetDirtyPosts,
   dbSavePost: mockSavePost,
-  dbDeletePost: vi.fn(),
+  dbDeletePost: mockDeletePost,
   dbGetPost: mockGetPost,
   dbSaveProject: mockSaveProject,
+}));
+
+vi.mock("$lib/fs", () => ({
+  postFileExists: (...args: unknown[]) => mockPostFileExists(...args),
+  deletePostFile: (...args: unknown[]) => mockDeletePostFile(...args),
 }));
 
 vi.mock("$lib/parser", () => ({
@@ -152,6 +163,7 @@ describe("Syncer", () => {
     mockGetDirtyPosts.mockReset();
     mockSavePost.mockReset();
     mockSaveProject.mockReset();
+    mockDeletePost.mockReset();
     mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
     mockComputeSaveDates.mockReset();
@@ -165,6 +177,10 @@ describe("Syncer", () => {
     mockAdapterInitialPull.mockReset();
     mockAdapterMergeToMain.mockReset();
     mockEnsureGitToken.mockReset();
+    mockPostFileExists.mockReset();
+    mockDeletePostFile.mockReset();
+    mockPostFileExists.mockResolvedValue(true);
+    mockDeletePostFile.mockResolvedValue(undefined);
 
     mockSerializeMdx.mockImplementation(
       (post: IPostRecord) => `serialized-${post.id}`,
@@ -515,6 +531,100 @@ describe("Syncer", () => {
     });
   });
 
+  describe("pulled deletions (Phase 2)", () => {
+    it("deletes IDB row + lightning-fs mirror and fires hook when adapter returns deleted entry", async () => {
+      mockGetDirtyPosts.mockResolvedValue([]);
+      mockAdapterCheckRemote.mockResolvedValue({
+        hasChanges: true,
+        headSha: "sha-new",
+        lastCommitTime: 1700000000000,
+      });
+      mockAdapterPull.mockResolvedValue([
+        { id: "post-deleted", deleted: true },
+      ]);
+      mockGetPost.mockResolvedValue(makeDirtyPost({ id: "post-deleted" }));
+
+      const hook = vi.fn();
+      syncer.addAfterSyncHook(hook);
+
+      const result = await syncer.pull(makeMockProjectEntry());
+
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-deleted");
+      expect(mockDeletePostFile).toHaveBeenCalledTimes(1);
+      expect(mockDeletePostFile).toHaveBeenCalledWith("proj-1", "post-deleted");
+      expect(mockSavePost).not.toHaveBeenCalled();
+      // Hook fires twice: once for the deleted post, once at the end of pull.
+      expect(hook).toHaveBeenCalledTimes(2);
+      expect(hook).toHaveBeenNthCalledWith(
+        1,
+        "proj-1",
+        "post-deleted",
+        undefined,
+      );
+      expect(hook).toHaveBeenNthCalledWith(
+        2,
+        "proj-1",
+        undefined,
+        undefined,
+        expect.any(Number),
+      );
+      expect(result).toEqual([]);
+    });
+
+    it("preserves locally-dirty row but still deletes row that is returned as deleted", async () => {
+      mockGetDirtyPosts.mockResolvedValue([]);
+      mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
+      mockAdapterPull.mockResolvedValue([
+        { id: "kept", content: "# New content" },
+        { id: "gone", deleted: true },
+      ]);
+      const localKeptDirty = makeDirtyPost({ id: "kept", dirty: true });
+      mockGetPost.mockResolvedValueOnce(localKeptDirty);
+
+      const result = await syncer.pull(makeMockProjectEntry());
+
+      expect(mockSavePost).not.toHaveBeenCalled();
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "gone");
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe("kept");
+      expect(result[0].dirty).toBe(true);
+    });
+
+    it("passes storedRemoteSha + headSha from checkRemote into adapter.pull", async () => {
+      mockAdapterCheckRemote.mockResolvedValue({
+        hasChanges: true,
+        headSha: "sha-head",
+      });
+      mockAdapterPull.mockResolvedValue([]);
+      mockGetPost.mockResolvedValue(undefined);
+
+      const project = makeMockProjectEntry();
+      project.storedRemoteSha = "sha-stored";
+
+      await syncer.pull(project);
+
+      expect(mockAdapterPull).toHaveBeenCalledWith(
+        "proj-1",
+        "decrypted-token",
+        "sha-stored",
+        "sha-head",
+      );
+    });
+
+    it("ignores deletePostFile error during pulled-delete (file may not exist locally)", async () => {
+      mockGetDirtyPosts.mockResolvedValue([]);
+      mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
+      mockAdapterPull.mockResolvedValue([{ id: "ghost", deleted: true }]);
+      mockDeletePostFile.mockRejectedValue(new Error("ENOENT"));
+      mockGetPost.mockResolvedValue(undefined);
+
+      await expect(syncer.pull(makeMockProjectEntry())).resolves.toEqual([]);
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("pull", () => {
     it("skips pull when checkRemote returns false", async () => {
       mockAdapterCheckRemote.mockResolvedValue({ hasChanges: false });
@@ -541,7 +651,12 @@ describe("Syncer", () => {
         "decrypted-token",
         undefined,
       );
-      expect(mockAdapterPull).toHaveBeenCalledWith("proj-1", "decrypted-token");
+      expect(mockAdapterPull).toHaveBeenCalledWith(
+        "proj-1",
+        "decrypted-token",
+        undefined,
+        undefined,
+      );
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("post-1");
     });
@@ -555,7 +670,12 @@ describe("Syncer", () => {
       );
 
       expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
-      expect(mockAdapterPull).toHaveBeenCalledWith("proj-1", "override-token");
+      expect(mockAdapterPull).toHaveBeenCalledWith(
+        "proj-1",
+        "override-token",
+        undefined,
+        undefined,
+      );
       expect(result).toHaveLength(1);
     });
 

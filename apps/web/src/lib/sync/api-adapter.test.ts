@@ -260,6 +260,327 @@ describe("pull", () => {
   });
 });
 
+describe("pull via compare API (Phase 2)", () => {
+  function jsonOnce(payload: unknown): Response {
+    return {
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(payload),
+      text: () => Promise.resolve(""),
+    } as Response;
+  }
+
+  function contentsResponse(content: string): Response {
+    return jsonOnce({
+      sha: "blob-sha",
+      content: btoa(content),
+    });
+  }
+
+  function compareResponse(files: Array<{ filename: string; status: string }>) {
+    return jsonOnce({ files });
+  }
+
+  it("fetches single modified file via compare → contents GET", async () => {
+    let compareHit = false;
+    let contentsHit = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        compareHit = true;
+        return Promise.resolve(
+          compareResponse([
+            { filename: "src/content/post-1.mdx", status: "modified" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        contentsHit = true;
+        return Promise.resolve(contentsResponse("# new content") as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(compareHit).toBe(true);
+    expect(contentsHit).toBe(true);
+    expect(entries).toEqual([{ id: "post-1", content: "# new content" }]);
+    expect(mockWritePostFile).toHaveBeenCalledWith(
+      "proj-1",
+      "post-1",
+      "# new content",
+    );
+
+    const compareCall = (
+      globalThis.fetch as ReturnType<typeof vi.fn>
+    ).mock.calls.find((c) => c[0].toString().includes("/compare/"));
+    expect(compareCall?.[0]).toBe(
+      "https://api.github.com/repos/owner/repo/compare/sha-base...sha-head",
+    );
+  });
+
+  it("fetches single added file via compare", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve(
+          compareResponse([
+            { filename: "src/content/new.mdx", status: "added" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        return Promise.resolve(contentsResponse("# new") as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(entries).toEqual([{ id: "new", content: "# new" }]);
+  });
+
+  it("handles multiple file changes in one compare response", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve(
+          compareResponse([
+            { filename: "src/content/a.mdx", status: "modified" },
+            { filename: "src/content/b.mdx", status: "added" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        return Promise.resolve(contentsResponse("content") as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(entries).toHaveLength(2);
+    expect(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) =>
+        c[0].toString().includes("/contents/"),
+      ),
+    ).toHaveLength(2);
+  });
+
+  it("marks a removed file as deleted (no contents fetch, lightning-fs file deleted)", async () => {
+    let contentsHitCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve(
+          compareResponse([
+            { filename: "src/content/removed.mdx", status: "removed" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        contentsHitCount++;
+        return Promise.resolve({} as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(entries).toEqual([{ id: "removed", deleted: true }]);
+    expect(contentsHitCount).toBe(0);
+    expect(mockDeletePostFile).toHaveBeenCalledWith("proj-1", "removed");
+  });
+
+  it("skips non-.mdx files in the compare response", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve(
+          compareResponse([
+            { filename: "README.md", status: "modified" },
+            { filename: "src/content/keep.mdx", status: "modified" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        return Promise.resolve(contentsResponse("# keep") as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(entries).toEqual([{ id: "keep", content: "# keep" }]);
+  });
+
+  it("falls back to GraphQL pull when storedRemoteSha is missing (first pull)", async () => {
+    const graphqlResponse = {
+      data: {
+        repository: {
+          object: {
+            entries: [{ name: "post-1.mdx", object: { text: "content-1" } }],
+          },
+        },
+      },
+    };
+
+    let compareHit = false;
+    let graphqlHit = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        compareHit = true;
+        return Promise.resolve({} as Response);
+      }
+      if (urlStr.includes("/graphql")) {
+        graphqlHit = true;
+        return Promise.resolve(jsonOnce(graphqlResponse) as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull("proj-1", "token-abc");
+
+    expect(compareHit).toBe(false);
+    expect(graphqlHit).toBe(true);
+    expect(entries).toEqual([{ id: "post-1", content: "content-1" }]);
+  });
+
+  it("falls back to GraphQL pull when compare returns 404 (base sha missing)", async () => {
+    const graphqlResponse = {
+      data: {
+        repository: {
+          object: {
+            entries: [{ name: "post-1.mdx", object: { text: "content-1" } }],
+          },
+        },
+      },
+    };
+
+    let graphqlHit = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Not Found"),
+        } as Response);
+      }
+      if (urlStr.includes("/graphql")) {
+        graphqlHit = true;
+        return Promise.resolve(jsonOnce(graphqlResponse) as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-gc",
+      "sha-head",
+    );
+
+    expect(graphqlHit).toBe(true);
+    expect(entries).toEqual([{ id: "post-1", content: "content-1" }]);
+  });
+
+  it("throws when compare API returns 403 (rate limit)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve({
+          ok: false,
+          status: 403,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("rate limit exceeded"),
+        } as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    await expect(
+      adapter.pull("proj-1", "token-abc", "sha-base", "sha-head"),
+    ).rejects.toThrow("GitHub compare API failed: 403");
+
+    expect(mockWritePostFile).not.toHaveBeenCalled();
+  });
+
+  it("skips entries whose contents GET fails (file too large, removed mid-flight, etc.)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((url) => {
+      const urlStr = url.toString();
+      if (urlStr.includes("/compare/")) {
+        return Promise.resolve(
+          compareResponse([
+            { filename: "src/content/ok.mdx", status: "modified" },
+            { filename: "src/content/broken.mdx", status: "modified" },
+          ]) as Response,
+        );
+      }
+      if (urlStr.includes("/contents/")) {
+        if (urlStr.includes("ok.mdx")) {
+          return Promise.resolve(contentsResponse("# ok") as Response);
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+          text: () => Promise.resolve("Not Found"),
+        } as Response);
+      }
+      return Promise.resolve({} as Response);
+    });
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const entries = await adapter.pull(
+      "proj-1",
+      "token-abc",
+      "sha-base",
+      "sha-head",
+    );
+
+    expect(entries).toEqual([{ id: "ok", content: "# ok" }]);
+    expect(mockWritePostFile).toHaveBeenCalledTimes(1);
+    expect(mockWritePostFile).toHaveBeenCalledWith("proj-1", "ok", "# ok");
+  });
+});
+
 describe("commitAndPush", () => {
   it("creates a new file via PUT to GitHub API", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(
