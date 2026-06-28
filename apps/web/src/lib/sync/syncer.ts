@@ -341,6 +341,7 @@ export class Syncer {
           dirty: false,
         };
 
+        // TODO: will be changed as part of conflict mgmt in sync refactor
         // Guard: never overwrite a locally-dirty post with stale remote data
         const local = await dbGetPost(projectId, record.id);
         if (local?.dirty) {
@@ -381,7 +382,7 @@ export class Syncer {
       this.#syncAllDirty()
         .catch(() => {})
         .finally(() => this.#schedule());
-    }, 10_000);
+    }, 60_000);
   }
 
   #clearTimer() {

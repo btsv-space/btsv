@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { untrack, onMount, onDestroy } from "svelte";
+  import { untrack, onMount, onDestroy, tick } from "svelte";
   import { posts } from "$lib/stores/posts.svelte";
   import { loadPosts } from "$lib/stores/syncer.svelte";
   import { syncer } from "$lib/stores/syncer.svelte";
@@ -45,13 +45,13 @@
     }
   }
 
-  // let workingPost = $state<IPostRecord | null>(null);
-  let workingPost = $derived(posts.value.find((p) => p.id === postId) || null);
+  let workingPost = $state<IPostRecord | null>(null);
   let tagsInput = $state("");
   let saveError = $state<{ title: string; message: string } | null>(null);
   let showDeleteConfirm = $state(false);
   let isWriteMode = $state(true);
-  let containerEl: HTMLDivElement | undefined;
+  let containerEl: HTMLDivElement | undefined = $state();
+  let bodyTextarea: HTMLTextAreaElement | undefined = $state();
 
   let saver: DebouncedSaver | null = null;
   let unregisterHook: (() => void) | null = null;
@@ -99,6 +99,17 @@
     }
   }
 
+  async function handleBodyInput(e: Event) {
+    const target = e.target as HTMLTextAreaElement;
+    const start = target.selectionStart;
+    const end = target.selectionEnd;
+    if (workingPost) {
+      workingPost.body = target.value;
+    }
+    await tick();
+    target.setSelectionRange(start, end);
+  }
+
   async function handleDelete() {
     showDeleteConfirm = false;
     saver?.cancel();
@@ -115,10 +126,13 @@
 
   onMount(async () => {
     await loadPosts(projectId, true);
-    if (!workingPost) {
+
+    const found = posts.value.find((p) => p.id === postId) || null;
+    if (!found) {
       goto(`/${projectId}`);
       return;
     }
+    workingPost = found;
 
     tagsInput = workingPost.tags.join(", ");
 
@@ -311,7 +325,9 @@
         >
           <span class={isWriteMode ? "max-md:hidden" : ""}>Content</span>
           <textarea
-            bind:value={workingPost.body}
+            bind:this={bodyTextarea}
+            value={workingPost.body}
+            oninput={handleBodyInput}
             class="w-full min-h-100 px-4 py-3 border border-input rounded-md text-sm font-mono bg-background text-foreground resize-y leading-relaxed max-md:flex-1 max-md:min-h-0"
           ></textarea>
         </label>
