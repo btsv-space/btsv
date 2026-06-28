@@ -3,7 +3,6 @@ import {
   POSTS_DIR,
   POST_EXT,
   FS_DB_NAME,
-  API_REMOTE_SHA_FILE,
 } from "$lib/shared/constants";
 
 let fsPromise: ReturnType<
@@ -98,34 +97,4 @@ export async function checkProjectDirExists(
   } catch {
     return false;
   }
-}
-
-export function getApiRemoteShaPath(projectId: string): string {
-  return `${PROJECTS_DIR}/${projectId}/${API_REMOTE_SHA_FILE}`;
-}
-
-export async function readApiRemoteSha(
-  projectId: string,
-): Promise<string | null> {
-  try {
-    const fs = await getFS();
-    const content = await fs.promises.readFile(
-      getApiRemoteShaPath(projectId),
-      "utf8",
-    );
-    return (content as string).trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-export async function writeApiRemoteSha(
-  projectId: string,
-  sha: string,
-): Promise<void> {
-  const fs = await getFS();
-  const path = getApiRemoteShaPath(projectId);
-  const parent = path.substring(0, path.lastIndexOf("/"));
-  await ensureDirChain(fs, parent);
-  await fs.promises.writeFile(path, sha, "utf8");
 }

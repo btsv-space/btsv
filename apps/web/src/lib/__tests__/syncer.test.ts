@@ -6,6 +6,7 @@ import type { ISyncAdapter } from "$lib/shared/types";
 const {
   mockGetDirtyPosts,
   mockSavePost,
+  mockSaveProject,
   mockGetPost,
   mockSerializeMdx,
   mockComputeSaveDates,
@@ -24,6 +25,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetDirtyPosts: vi.fn(),
   mockSavePost: vi.fn(),
+  mockSaveProject: vi.fn(),
   mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
   mockComputeSaveDates: vi.fn(),
@@ -46,6 +48,7 @@ vi.mock("$lib/db", () => ({
   dbSavePost: mockSavePost,
   dbDeletePost: vi.fn(),
   dbGetPost: mockGetPost,
+  dbSaveProject: mockSaveProject,
 }));
 
 vi.mock("$lib/parser", () => ({
@@ -115,7 +118,7 @@ function makeMockAdapter(): ISyncAdapter {
   };
 }
 
-function makeMockProjectEntry() {
+function makeMockProjectEntry(): TProjectEntry {
   return {
     id: "proj-1",
     name: "Test Project",
@@ -148,6 +151,7 @@ describe("Syncer", () => {
 
     mockGetDirtyPosts.mockReset();
     mockSavePost.mockReset();
+    mockSaveProject.mockReset();
     mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
     mockComputeSaveDates.mockReset();
@@ -520,6 +524,7 @@ describe("Syncer", () => {
       expect(mockAdapterCheckRemote).toHaveBeenCalledWith(
         "proj-1",
         "decrypted-token",
+        undefined,
       );
       expect(mockAdapterPull).not.toHaveBeenCalled();
       expect(result).toEqual([]);
@@ -534,6 +539,7 @@ describe("Syncer", () => {
       expect(mockAdapterCheckRemote).toHaveBeenCalledWith(
         "proj-1",
         "decrypted-token",
+        undefined,
       );
       expect(mockAdapterPull).toHaveBeenCalledWith("proj-1", "decrypted-token");
       expect(result).toHaveLength(1);
@@ -560,6 +566,98 @@ describe("Syncer", () => {
 
       expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("storedRemoteSha persistence", () => {
+    it("persists checkRemote headSha to project + IDB after a successful pull", async () => {
+      mockAdapterCheckRemote.mockResolvedValue({
+        hasChanges: true,
+        headSha: "sha-tip",
+      });
+      mockAdapterPull.mockResolvedValue([]);
+      mockGetPost.mockResolvedValue(undefined);
+
+      const project = makeMockProjectEntry();
+      expect(project.storedRemoteSha).toBeUndefined();
+
+      await syncer.pull(project);
+
+      expect(project.storedRemoteSha).toBe("sha-tip");
+      expect(mockSaveProject).toHaveBeenCalledWith(project);
+    });
+
+    it("does not call adapter.pull or persist when remote hasn't moved", async () => {
+      mockAdapterCheckRemote.mockResolvedValue({
+        hasChanges: false,
+        headSha: "sha-tip",
+      });
+
+      const project = makeMockProjectEntry();
+      project.storedRemoteSha = "sha-tip";
+
+      await syncer.pull(project);
+
+      expect(mockAdapterPull).not.toHaveBeenCalled();
+      expect(project.storedRemoteSha).toBe("sha-tip");
+      expect(mockSaveProject).not.toHaveBeenCalled();
+    });
+
+    it("passes stored storedRemoteSha to checkRemote", async () => {
+      mockAdapterCheckRemote.mockResolvedValue({
+        hasChanges: false,
+        headSha: "x",
+      });
+
+      const project = makeMockProjectEntry();
+      project.storedRemoteSha = "stored-sha";
+
+      await syncer.pull(project);
+
+      expect(mockAdapterCheckRemote).toHaveBeenCalledWith(
+        "proj-1",
+        "decrypted-token",
+        "stored-sha",
+      );
+    });
+
+    it("persists headSha to project + IDB after initialPull", async () => {
+      mockAdapterInitialPull.mockResolvedValue({
+        entries: [],
+        lastCommitTime: undefined,
+        headSha: "sha-init",
+      });
+
+      const project = makeMockProjectEntry();
+      await syncer.initialPull(project);
+
+      expect(project.storedRemoteSha).toBe("sha-init");
+      expect(mockSaveProject).toHaveBeenCalledWith(project);
+    });
+
+    it("persists pushed commit sha to project + IDB after push", async () => {
+      const post = makeDirtyPost({ draft: false });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockAdapterCommitAndPush.mockResolvedValue("sha-push");
+
+      const project = makeMockProjectEntry();
+      await syncer.push(project);
+
+      expect(project.storedRemoteSha).toBe("sha-push");
+      expect(mockSaveProject).toHaveBeenCalledWith(project);
+    });
+
+    it("does not persist storedRemoteSha when push commits nothing", async () => {
+      const post = makeDirtyPost();
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockAdapterCommitAndPush.mockResolvedValue(null);
+
+      const project = makeMockProjectEntry();
+      project.storedRemoteSha = "unchanged";
+      await syncer.push(project);
+
+      expect(project.storedRemoteSha).toBe("unchanged");
+      expect(mockSaveProject).not.toHaveBeenCalled();
     });
   });
 

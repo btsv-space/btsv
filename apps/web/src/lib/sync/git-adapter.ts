@@ -36,6 +36,7 @@ export class GitAdapter implements ISyncAdapter {
   async checkRemote(
     projectId: string,
     gitToken: string,
+    storedRemoteSha?: string,
   ): Promise<IRemoteCheckResult> {
     const fs = await getFS();
     const dir = getDir(projectId);
@@ -72,13 +73,6 @@ export class GitAdapter implements ISyncAdapter {
         return { hasChanges: true };
       }
 
-      let localOid: string;
-      try {
-        localOid = await git.resolveRef({ fs, dir, ref: "HEAD" });
-      } catch {
-        return { hasChanges: true };
-      }
-
       let lastCommitTime: number | undefined;
       try {
         const log = await git.log({
@@ -92,7 +86,11 @@ export class GitAdapter implements ISyncAdapter {
         console.debug("[git] checkRemote log best-effort error:", err);
       }
 
-      return { hasChanges: localOid !== remoteOid, lastCommitTime };
+      return {
+        hasChanges: storedRemoteSha !== remoteOid,
+        lastCommitTime,
+        headSha: remoteOid,
+      };
     } catch {
       return { hasChanges: true };
     }
@@ -101,7 +99,11 @@ export class GitAdapter implements ISyncAdapter {
   async initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }> {
+  ): Promise<{
+    entries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }> {
     const git = await import("isomorphic-git");
     const { default: http } = await import("isomorphic-git/http/web");
     const fs = await getFS();
@@ -184,7 +186,18 @@ export class GitAdapter implements ISyncAdapter {
       lastCommitTime = (logResult[0]?.commit?.author?.timestamp ?? 0) * 1000;
     }
 
-    return { entries, lastCommitTime };
+    let headSha: string | undefined;
+    try {
+      headSha = await git.resolveRef({
+        fs,
+        dir,
+        ref: `refs/remotes/origin/${this.gitBranch}`,
+      });
+    } catch {
+      headSha = logResult?.[0]?.oid;
+    }
+
+    return { entries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {

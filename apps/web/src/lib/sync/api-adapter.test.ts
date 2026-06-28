@@ -13,8 +13,6 @@ const mockGetPostPath = vi.fn();
 const mockEnsureDirChain = vi.fn().mockResolvedValue(undefined);
 const mockWritePostFile = vi.fn().mockResolvedValue(undefined);
 const mockDeletePostFile = vi.fn().mockResolvedValue(undefined);
-const mockWriteApiRemoteSha = vi.fn().mockResolvedValue(undefined);
-const mockReadApiRemoteSha = vi.fn().mockResolvedValue(null);
 
 vi.mock("$lib/fs", () => ({
   getFS: (...args: unknown[]) => mockGetFS(...args),
@@ -23,8 +21,6 @@ vi.mock("$lib/fs", () => ({
   ensureDirChain: (...args: unknown[]) => mockEnsureDirChain(...args),
   writePostFile: (...args: unknown[]) => mockWritePostFile(...args),
   deletePostFile: (...args: unknown[]) => mockDeletePostFile(...args),
-  writeApiRemoteSha: (...args: unknown[]) => mockWriteApiRemoteSha(...args),
-  readApiRemoteSha: (...args: unknown[]) => mockReadApiRemoteSha(...args),
 }));
 
 vi.mock("$lib/shared/constants", () => ({
@@ -62,6 +58,82 @@ describe("constructor", () => {
   it("parses owner and repo from repoUrl", () => {
     const adapter = new ApiAdapter("https://github.com/owner/repo.git");
     expect(adapter).toBeInstanceOf(ApiAdapter);
+  });
+});
+
+describe("checkRemote", () => {
+  it("returns hasChanges:false + headSha when branch tip matches stored sha", async () => {
+    mockFetch({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          commit: {
+            sha: "sha-tip",
+            commit: {
+              committer: { date: "2026-06-01T00:00:00Z" },
+            },
+          },
+        }),
+      text: () => Promise.resolve(""),
+    } as Response);
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const result = await adapter.checkRemote("proj-1", "token-abc", "sha-tip");
+
+    expect(result.hasChanges).toBe(false);
+    expect(result.headSha).toBe("sha-tip");
+    expect(result.lastCommitTime).toBe(
+      new Date("2026-06-01T00:00:00Z").getTime(),
+    );
+  });
+
+  it("returns hasChanges:true + headSha when branch tip differs from stored", async () => {
+    mockFetch({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          commit: { sha: "sha-new", commit: { committer: { date: "" } } },
+        }),
+      text: () => Promise.resolve(""),
+    } as Response);
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const result = await adapter.checkRemote("proj-1", "token-abc", "sha-old");
+
+    expect(result.hasChanges).toBe(true);
+    expect(result.headSha).toBe("sha-new");
+  });
+
+  it("returns hasChanges:true on first sync (no stored sha)", async () => {
+    mockFetch({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ commit: { sha: "sha-first" } }),
+      text: () => Promise.resolve(""),
+    } as Response);
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const result = await adapter.checkRemote("proj-1", "token-abc");
+
+    expect(result.hasChanges).toBe(true);
+    expect(result.headSha).toBe("sha-first");
+  });
+
+  it("returns hasChanges:true when branch is not found", async () => {
+    mockFetch({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({}),
+      text: () => Promise.resolve("Not Found"),
+    } as Response);
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const result = await adapter.checkRemote("proj-1", "token-abc", "sha-old");
+
+    expect(result.hasChanges).toBe(true);
+    expect(result.headSha).toBeUndefined();
   });
 });
 

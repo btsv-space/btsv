@@ -1,4 +1,10 @@
-import { dbGetDirtyPosts, dbSavePost, dbDeletePost, dbGetPost } from "$lib/db";
+import {
+  dbGetDirtyPosts,
+  dbSavePost,
+  dbDeletePost,
+  dbGetPost,
+  dbSaveProject,
+} from "$lib/db";
 import { serializeMdx, computeSaveDates, parseMdx } from "$lib/parser";
 import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
@@ -7,9 +13,9 @@ import { createSyncAdapter } from "$lib/sync/adapter";
 import { postFileExists } from "$lib/fs";
 import {
   SyncState,
-  type IProject,
   type IPostEntry,
   type IPostRecord,
+  type TProjectEntry,
   type TSyncHook,
   type ISyncerConfig,
 } from "$lib/shared/types";
@@ -50,7 +56,7 @@ export class Syncer {
   // ── Operations ──
 
   async pull(
-    project: IProject,
+    project: TProjectEntry,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
     return this.#runSerial(project.id, async () => {
@@ -64,11 +70,17 @@ export class Syncer {
 
       const adapter = await createSyncAdapter(project, prefs);
       let lastCommitTime: number | undefined;
+      let headSha: string | undefined;
 
       try {
         if (!tokenOverride) {
-          const result = await adapter.checkRemote(project.id, token);
+          const result = await adapter.checkRemote(
+            project.id,
+            token,
+            project.storedRemoteSha,
+          );
           lastCommitTime = result.lastCommitTime;
+          headSha = result.headSha;
           if (!result.hasChanges) {
             console.log(
               `[syncer] no remote changes for ${project.id}, skipping pull`,
@@ -89,6 +101,12 @@ export class Syncer {
         console.log(`[syncer] adapter.pull returned ${entries.length} entries`);
 
         const records = await this.#parseAndSave(project.id, entries);
+
+        if (headSha) {
+          project.storedRemoteSha = headSha;
+          await dbSaveProject(project);
+        }
+
         this.#runAfterSyncHooks(
           project.id,
           undefined,
@@ -109,7 +127,7 @@ export class Syncer {
   }
 
   async initialPull(
-    project: IProject,
+    project: TProjectEntry,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
     return this.#runSerial(project.id, async () => {
@@ -123,13 +141,19 @@ export class Syncer {
       const adapter = await createSyncAdapter(project, prefs);
       this.#setStatus(project.id, SyncState.SYNCING_PULL);
       try {
-        const { entries, lastCommitTime } = await adapter.initialPull(
+        const { entries, lastCommitTime, headSha } = await adapter.initialPull(
           project.id,
           token,
         );
         console.log(`[syncer] initialPull returned ${entries.length} entries`);
 
         const records = await this.#parseAndSave(project.id, entries);
+
+        if (headSha) {
+          project.storedRemoteSha = headSha;
+          await dbSaveProject(project);
+        }
+
         this.#runAfterSyncHooks(
           project.id,
           undefined,
@@ -149,7 +173,7 @@ export class Syncer {
     });
   }
 
-  async push(project: IProject): Promise<boolean> {
+  async push(project: TProjectEntry): Promise<boolean> {
     return this.#runSerial(project.id, async () => {
       const dirty = await dbGetDirtyPosts(project.id);
       if (dirty.length === 0) {
@@ -164,6 +188,7 @@ export class Syncer {
       let allOk = true;
       let anyPublished = false;
       let lastToken: string | null = null;
+      let pushedSha: string | null = null;
 
       for (const post of dirty) {
         try {
@@ -189,7 +214,7 @@ export class Syncer {
           const ts = commitTimestamp();
           const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-save-${ts}`;
 
-          await adapter.commitAndPush(
+          const commitSha = await adapter.commitAndPush(
             project.id,
             post.id,
             mdxContent,
@@ -198,6 +223,7 @@ export class Syncer {
           );
 
           post.dirty = false;
+          if (commitSha) pushedSha = commitSha;
 
           if (!post.draft) anyPublished = true;
 
@@ -223,6 +249,11 @@ export class Syncer {
         }
       }
 
+      if (allOk && pushedSha) {
+        project.storedRemoteSha = pushedSha;
+        await dbSaveProject(project);
+      }
+
       if (allOk) {
         this.#setStatus(project.id, SyncState.SYNCED);
       }
@@ -231,7 +262,7 @@ export class Syncer {
     });
   }
 
-  async commitDeletion(project: IProject, postId: string): Promise<void> {
+  async commitDeletion(project: TProjectEntry, postId: string): Promise<void> {
     await this.#runSerial(project.id, async () => {
       const post = await dbGetPost(project.id, postId);
       const wasPublished = post && !post.draft;
@@ -257,8 +288,18 @@ export class Syncer {
       const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
 
       const adapter = await createSyncAdapter(project, prefs);
-      await adapter.commitDeletion(project.id, postId, message, token);
+      const commitSha = await adapter.commitDeletion(
+        project.id,
+        postId,
+        message,
+        token,
+      );
       await dbDeletePost(project.id, postId);
+
+      if (commitSha) {
+        project.storedRemoteSha = commitSha;
+        await dbSaveProject(project);
+      }
 
       this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
 

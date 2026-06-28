@@ -48,6 +48,7 @@ export interface IPostEntry {
 export interface IRemoteCheckResult {
   hasChanges: boolean;
   lastCommitTime?: number;
+  headSha?: string;
 }
 
 export type TSyncHook = (
@@ -58,12 +59,20 @@ export type TSyncHook = (
 ) => void;
 
 export interface ISyncAdapter {
-  checkRemote(projectId: string, gitToken: string): Promise<IRemoteCheckResult>;
+  checkRemote(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+  ): Promise<IRemoteCheckResult>;
   pull(projectId: string, gitToken: string): Promise<IPostEntry[]>;
   initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }>;
+  ): Promise<{
+    entries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }>;
   commitAndPush(
     projectId: string,
     postId: string,
@@ -197,6 +206,7 @@ export type TProjectEntry = IProject & {
   status: "unknown" | "ready" | "cloning" | "error";
   error: string;
   syncType?: TSyncType;
+  storedRemoteSha?: string;
 };
 
 // ── Key-set constants ──────────────────────────────

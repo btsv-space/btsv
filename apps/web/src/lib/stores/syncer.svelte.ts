@@ -65,6 +65,6 @@ export async function loadPosts(
 
   if (syncTypeChanged) {
     project.syncType = prefs.value.syncType;
-    await dbSaveProject({ ...project });
+    await dbSaveProject(project);
   }
 }

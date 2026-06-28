@@ -3,13 +3,7 @@ import type {
   IPostEntry,
   IRemoteCheckResult,
 } from "$lib/shared/types";
-import {
-  getPostPath,
-  writePostFile,
-  deletePostFile,
-  readApiRemoteSha,
-  writeApiRemoteSha,
-} from "$lib/fs";
+import { getPostPath, writePostFile, deletePostFile } from "$lib/fs";
 import {
   POST_EXT,
   DEFAULT_GIT_BRANCH,
@@ -50,8 +44,9 @@ export class ApiAdapter implements ISyncAdapter {
   }
 
   async checkRemote(
-    projectId: string,
+    _projectId: string,
     gitToken: string,
+    storedRemoteSha?: string,
   ): Promise<IRemoteCheckResult> {
     try {
       const res = await fetch(
@@ -65,15 +60,18 @@ export class ApiAdapter implements ISyncAdapter {
       );
       if (!res.ok) return { hasChanges: true };
       const data = await res.json();
-      const remoteSha: string = data.commit?.sha ?? "";
-      if (!remoteSha) return { hasChanges: true };
-      const stored = await readApiRemoteSha(projectId);
+      const headSha: string = data.commit?.sha ?? "";
+      if (!headSha) return { hasChanges: true };
 
       let lastCommitTime: number | undefined;
       const dateStr = data?.commit?.commit?.committer?.date;
       if (dateStr) lastCommitTime = new Date(dateStr).getTime();
 
-      return { hasChanges: stored !== remoteSha, lastCommitTime };
+      return {
+        hasChanges: storedRemoteSha !== headSha,
+        lastCommitTime,
+        headSha,
+      };
     } catch {
       return { hasChanges: true };
     }
@@ -82,18 +80,24 @@ export class ApiAdapter implements ISyncAdapter {
   async initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }> {
+  ): Promise<{
+    entries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }> {
     const branchRes = await fetch(
       `https://api.github.com/repos/${this.owner}/${this.repo}/branches/${encodeURIComponent(this.gitBranch)}`,
       { headers: { Authorization: `Bearer ${gitToken}` } },
     );
 
     let lastCommitTime: number | undefined;
+    let headSha: string | undefined;
 
     if (branchRes.ok) {
       const data = await branchRes.json();
       const dateStr = data?.commit?.commit?.committer?.date;
       if (dateStr) lastCommitTime = new Date(dateStr).getTime();
+      headSha = data?.commit?.sha ?? undefined;
     }
 
     if (!branchRes.ok) {
@@ -121,7 +125,7 @@ export class ApiAdapter implements ISyncAdapter {
     }
 
     const entries = await this.pull(projectId, gitToken);
-    return { entries, lastCommitTime };
+    return { entries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {
@@ -179,7 +183,7 @@ export class ApiAdapter implements ISyncAdapter {
 			}
 		`;
 
-    const graphqlPromise = fetch("https://api.github.com/graphql", {
+    const graphqlRes = await fetch("https://api.github.com/graphql", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -194,21 +198,6 @@ export class ApiAdapter implements ISyncAdapter {
         },
       }),
     });
-
-    const branchPromise = fetch(
-      `https://api.github.com/repos/${this.owner}/${this.repo}/branches/${encodeURIComponent(this.gitBranch)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${gitToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      },
-    );
-
-    const [graphqlRes, branchRes] = await Promise.all([
-      graphqlPromise,
-      branchPromise,
-    ]);
 
     if (!graphqlRes.ok) {
       const body = await graphqlRes.text();
@@ -233,16 +222,6 @@ export class ApiAdapter implements ISyncAdapter {
       await writePostFile(projectId, id, content);
 
       entries.push({ id, content });
-    }
-
-    try {
-      if (branchRes.ok) {
-        const branchData = await branchRes.json();
-        const sha = branchData.commit?.sha ?? null;
-        if (sha) await writeApiRemoteSha(projectId, sha);
-      }
-    } catch (err) {
-      console.debug("[api] pull best-effort error:", err);
     }
 
     return entries;
@@ -274,8 +253,6 @@ export class ApiAdapter implements ISyncAdapter {
     );
 
     const result = await putRes.json();
-    if (result.commit?.sha)
-      await writeApiRemoteSha(projectId, result.commit.sha);
     return result.commit?.sha ?? null;
   }
 
@@ -327,8 +304,6 @@ export class ApiAdapter implements ISyncAdapter {
     }
 
     const result = await delRes.json();
-    if (result.commit?.sha)
-      await writeApiRemoteSha(projectId, result.commit.sha);
     return result.commit?.sha ?? null;
   }
 }

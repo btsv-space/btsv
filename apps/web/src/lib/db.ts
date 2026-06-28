@@ -105,14 +105,14 @@ export async function dbSaveProjects(projects: TProjectEntry[]): Promise<void> {
   const store = tx.objectStore("projects");
   await store.clear();
   for (const p of projects) {
-    await store.put(p);
+    await store.put({ ...p });
   }
   await tx.done;
 }
 
 export async function dbSaveProject(project: TProjectEntry): Promise<void> {
   const db = await getDB();
-  await db.put("projects", project);
+  await db.put("projects", { ...project });
 }
 
 // ── Preferences cache ─────────────────────────────

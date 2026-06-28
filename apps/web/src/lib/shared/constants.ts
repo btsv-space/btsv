@@ -4,7 +4,6 @@ export const FS_DB_NAME = "btsv_fs";
 export const PROJECTS_DIR = "/projects";
 export const POSTS_DIR = "src/content/posts";
 export const POST_EXT = ".mdx";
-export const API_REMOTE_SHA_FILE = "api-remote-sha";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL ?? "http://localhost:8080/api";
