@@ -7,7 +7,7 @@ import { SvelteMap } from "svelte/reactivity";
 import { posts } from "$lib/stores/posts.svelte";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects } from "$lib/stores/projects.svelte";
-import { syncErrors, syncStates, syncer } from "$lib/stores/syncer.svelte";
+import { syncStatus, syncer } from "$lib/stores/syncer.svelte";
 
 const DEK_KEY = `${APP_NAMESPACE}_dek`;
 
@@ -92,8 +92,7 @@ export async function logout() {
     dek.value = null;
     posts.value = [];
     projects.value = [];
-    syncStates.clear();
-    syncErrors.clear();
+    syncStatus.clear();
     prefs.value = { syncType: "git" as TSyncType, proxyUrl: "" };
     goto(Route.LOGIN, { replaceState: true });
   }

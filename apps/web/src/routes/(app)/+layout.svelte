@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { projects, getProject } from "$lib/stores/projects.svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { syncer } from "$lib/stores/syncer.svelte";
   import { checkProjectDirExists } from "$lib/fs";
@@ -63,7 +63,7 @@
 
       const entries: TProjectEntry[] = await Promise.all(
         apiProjects.map(async (apiProject) => {
-          const existing = projects.value.find((e) => e.id === apiProject.id);
+          const existing = getProject(apiProject.id);
           if (existing) {
             console.log(
               `[/:layout] ${apiProject.id}: using cached status=${existing.status}`,

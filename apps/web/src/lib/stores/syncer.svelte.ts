@@ -1,23 +1,19 @@
 import { Syncer } from "$lib/sync/syncer";
 import { prefs } from "$lib/stores/prefs.svelte";
-import { projects } from "$lib/stores/projects.svelte";
+import { projects, getProject } from "$lib/stores/projects.svelte";
 import { posts } from "$lib/stores/posts.svelte";
 import { dbGetPosts, dbSaveProject } from "$lib/db";
 import { SvelteMap } from "svelte/reactivity";
-import { SyncState } from "$lib/shared/types";
+import { type ISyncStatus } from "$lib/shared/types";
 import { setProjectCommitTime } from "$lib/stores/recentProject.svelte";
 
-export const syncStates = new SvelteMap<string, SyncState>();
-export const syncErrors = new SvelteMap<string, string>();
+export const syncStatus = new SvelteMap<string, ISyncStatus>();
 
 export const syncer = new Syncer({
   getPrefs: () => prefs.value,
   getProjects: () => projects.value,
-  onStateChange: (pid, state) => {
-    syncStates.set(pid, state);
-  },
-  onError: (pid, err) => {
-    syncErrors.set(pid, err);
+  onSyncStatus: (pid, status) => {
+    syncStatus.set(pid, status);
   },
 });
 
@@ -42,7 +38,7 @@ export async function loadPosts(
     posts.value = cached.sort((a, b) => b.id.localeCompare(a.id));
   }
 
-  const project = projects.value.find((p) => p.id === projectId);
+  const project = getProject(projectId);
   if (!project) {
     console.error(`[loadPosts] project not found: ${projectId}`);
     return;
@@ -57,14 +53,12 @@ export async function loadPosts(
   );
 
   if (shouldPull) {
-    console.log(`[loadPosts] ${projectId}: pulling...`);
-    const parsed = await syncer.pull(project);
-    if (parsed.length > 0) {
-      posts.value = parsed.sort((a, b) => b.id.localeCompare(a.id));
+    await syncer.pull(project);
+    const afterPull = await dbGetPosts(projectId);
+    if (afterPull.length > 0) {
+      posts.value = afterPull.sort((a, b) => b.id.localeCompare(a.id));
     }
-    console.log(
-      `[loadPosts] ${projectId}: pull returned ${parsed.length} posts`,
-    );
+    console.log(`[loadPosts] ${projectId}: using pulled posts`);
   } else {
     console.log(`[loadPosts] ${projectId}: using cached, no pull`);
   }

@@ -8,6 +8,7 @@ import { postFileExists } from "$lib/fs";
 import {
   SyncState,
   type IProject,
+  type ISyncStatus,
   type IUserPreferences,
   type IPostEntry,
   type IPostRecord,
@@ -22,20 +23,36 @@ function getUsername(): string {
 export interface SyncerConfig {
   getPrefs: () => IUserPreferences;
   getProjects: () => TProjectEntry[];
-  onStateChange?: (projectId: string, state: SyncState) => void;
-  onError?: (projectId: string, error: string) => void;
+  onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
 }
 
 export class Syncer {
   private config: SyncerConfig;
   private started = false;
   private syncingAll = false;
-  private perProjectLock = new Set<string>();
+  private projectQueue = new Map<string, Promise<unknown>>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private afterSyncHooks = new Set<TSyncHook>();
 
   constructor(config: SyncerConfig) {
     this.config = config;
+  }
+
+  #setStatus(projectId: string, state: SyncState, errorMsg = ""): void {
+    this.config.onSyncStatus?.(projectId, {
+      state,
+      errorMsg: state === SyncState.ERROR ? errorMsg : "",
+    });
+  }
+
+  async #runSerial<T>(projectId: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.projectQueue.get(projectId) ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    this.projectQueue.set(
+      projectId,
+      next.catch(() => {}),
+    );
+    return next;
   }
 
   // ── Operations ──
@@ -44,89 +61,112 @@ export class Syncer {
     project: IProject,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
-    const prefs = this.config.getPrefs();
-    console.log(
-      `[syncer] pull: ${project.id} tokenOverride=${!!tokenOverride}`,
-    );
-    const token = tokenOverride ?? (await ensureGitToken(project.id));
-    if (!token) {
-      console.error(`[syncer] no git token for ${project.id}`);
-      return [];
-    }
+    return this.#runSerial(project.id, async () => {
+      const prefs = this.config.getPrefs();
+      const token = tokenOverride ?? (await ensureGitToken(project.id));
+      if (!token) {
+        console.error(`[syncer] no git token for ${project.id}`);
+        this.#setStatus(project.id, SyncState.ERROR, "No git token available");
+        return [];
+      }
 
-    const adapter = await createSyncAdapter(project, prefs);
+      const adapter = await createSyncAdapter(project, prefs);
+      let lastCommitTime: number | undefined;
 
-    let lastCommitTime: number | undefined;
+      try {
+        if (!tokenOverride) {
+          const result = await adapter.checkRemote(project.id, token);
+          lastCommitTime = result.lastCommitTime;
+          if (!result.hasChanges) {
+            console.log(
+              `[syncer] no remote changes for ${project.id}, skipping pull`,
+            );
+            this.#runAfterSyncHooks(
+              project.id,
+              undefined,
+              undefined,
+              lastCommitTime,
+            );
+            this.#setStatus(project.id, SyncState.SYNCED);
+            return [];
+          }
+        }
 
-    if (!tokenOverride) {
-      const result = await adapter.checkRemote(project.id, token);
-      lastCommitTime = result.lastCommitTime;
-      if (!result.hasChanges) {
-        console.log(
-          `[syncer] no remote changes for ${project.id}, skipping pull`,
-        );
+        this.#setStatus(project.id, SyncState.SYNCING_PULL);
+        const entries = await adapter.pull(project.id, token);
+        console.log(`[syncer] adapter.pull returned ${entries.length} entries`);
+
+        const records = await this.#parseAndSave(project.id, entries);
         this.#runAfterSyncHooks(
           project.id,
           undefined,
           undefined,
           lastCommitTime,
         );
+        this.#setStatus(project.id, SyncState.SYNCED);
+        return records;
+      } catch (err) {
+        this.#setStatus(
+          project.id,
+          SyncState.ERROR,
+          err instanceof Error ? err.message : "Pull failed",
+        );
         return [];
       }
-    }
-
-    const entries = await adapter.pull(project.id, token);
-    console.log(`[syncer] adapter.pull returned ${entries.length} entries`);
-
-    const records = await this.#parseAndSave(project.id, entries);
-    this.#runAfterSyncHooks(project.id, undefined, undefined, lastCommitTime);
-    return records;
+    });
   }
 
   async initialPull(
     project: IProject,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
-    const prefs = this.config.getPrefs();
-    console.log(`[syncer] initialPull: ${project.id}`);
-    const token = tokenOverride ?? (await ensureGitToken(project.id));
-    if (!token) {
-      console.error(`[syncer] no git token for ${project.id}`);
-      return [];
-    }
-    const adapter = await createSyncAdapter(project, prefs);
-    const { entries, lastCommitTime } = await adapter.initialPull(
-      project.id,
-      token,
-    );
-    console.log(`[syncer] initialPull returned ${entries.length} entries`);
-    const records = await this.#parseAndSave(project.id, entries);
-    this.#runAfterSyncHooks(project.id, undefined, undefined, lastCommitTime);
-    return records;
+    return this.#runSerial(project.id, async () => {
+      const prefs = this.config.getPrefs();
+      const token = tokenOverride ?? (await ensureGitToken(project.id));
+      if (!token) {
+        console.error(`[syncer] no git token for ${project.id}`);
+        this.#setStatus(project.id, SyncState.ERROR, "No git token available");
+        return [];
+      }
+      const adapter = await createSyncAdapter(project, prefs);
+      this.#setStatus(project.id, SyncState.SYNCING_PULL);
+      try {
+        const { entries, lastCommitTime } = await adapter.initialPull(
+          project.id,
+          token,
+        );
+        console.log(`[syncer] initialPull returned ${entries.length} entries`);
+
+        const records = await this.#parseAndSave(project.id, entries);
+        this.#runAfterSyncHooks(
+          project.id,
+          undefined,
+          undefined,
+          lastCommitTime,
+        );
+        this.#setStatus(project.id, SyncState.SYNCED);
+        return records;
+      } catch (err) {
+        this.#setStatus(
+          project.id,
+          SyncState.ERROR,
+          err instanceof Error ? err.message : "Initial pull failed",
+        );
+        return [];
+      }
+    });
   }
 
-  async syncDirtyPosts(projectId: string): Promise<boolean> {
-    if (this.perProjectLock.has(projectId)) return false;
-    this.perProjectLock.add(projectId);
-
-    try {
-      const projects = this.config.getProjects();
-      const project = projects.find((p) => p.id === projectId);
-      if (!project) {
-        console.error(`[syncer] project ${projectId} not found for sync`);
-        return false;
-      }
-
-      const prefs = this.config.getPrefs();
-      const dirty = await dbGetDirtyPosts(projectId);
-
+  async push(project: IProject): Promise<boolean> {
+    return this.#runSerial(project.id, async () => {
+      const dirty = await dbGetDirtyPosts(project.id);
       if (dirty.length === 0) {
-        this.config.onStateChange?.(projectId, SyncState.SYNCED);
+        this.#setStatus(project.id, SyncState.SYNCED);
         return true;
       }
 
-      this.config.onStateChange?.(projectId, SyncState.SYNCING);
-
+      this.#setStatus(project.id, SyncState.SYNCING_PUSH);
+      const prefs = this.config.getPrefs();
       const username = getUsername();
       const adapter = await createSyncAdapter(project, prefs);
       let allOk = true;
@@ -135,11 +175,14 @@ export class Syncer {
 
       for (const post of dirty) {
         try {
-          const token = await ensureGitToken(projectId);
+          const token = await ensureGitToken(project.id);
           if (!token) {
-            console.warn(`[syncer] no git token for ${projectId}, skipping`);
-            this.config.onStateChange?.(projectId, SyncState.ERROR);
-            this.config.onError?.(projectId, "No git token available");
+            console.warn(`[syncer] no git token for ${project.id}, skipping`);
+            this.#setStatus(
+              project.id,
+              SyncState.ERROR,
+              "No git token available",
+            );
             allOk = false;
             continue;
           }
@@ -152,10 +195,10 @@ export class Syncer {
           const mdxContent = serializeMdx(post);
 
           const ts = commitTimestamp();
-          const message = `${APP_NAMESPACE}-${username}-${projectId}-${post.id}-save-${ts}`;
+          const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-save-${ts}`;
 
           await adapter.commitAndPush(
-            projectId,
+            project.id,
             post.id,
             mdxContent,
             message,
@@ -168,77 +211,76 @@ export class Syncer {
 
           await dbSavePost(post);
 
-          this.#runAfterSyncHooks(projectId, post.id, post, Date.now());
+          this.#runAfterSyncHooks(project.id, post.id, post, Date.now());
         } catch (err) {
           console.error(`[syncer] sync failed for ${post.id}:`, err);
-          this.config.onStateChange?.(projectId, SyncState.ERROR);
-          this.config.onError?.(
-            projectId,
+          this.#setStatus(
+            project.id,
+            SyncState.ERROR,
             err instanceof Error ? err.message : "Sync failed",
           );
           allOk = false;
         }
       }
 
-      if (allOk) {
-        this.config.onStateChange?.(projectId, SyncState.SYNCED);
-        this.config.onError?.(projectId, "");
-      }
-
       if (anyPublished && allOk && lastToken) {
         try {
-          await adapter.mergeToMain(projectId, lastToken);
+          await adapter.mergeToMain(project.id, lastToken);
         } catch (err) {
-          console.error(`[syncer] mergeToMain failed for ${projectId}:`, err);
+          console.error(`[syncer] mergeToMain failed for ${project.id}:`, err);
         }
       }
 
+      if (allOk) {
+        this.#setStatus(project.id, SyncState.SYNCED);
+      }
+
       return allOk;
-    } finally {
-      this.perProjectLock.delete(projectId);
-    }
+    });
   }
 
   async commitDeletion(project: IProject, postId: string): Promise<void> {
-    const post = await dbGetPost(project.id, postId);
-    const wasPublished = post && !post.draft;
+    await this.#runSerial(project.id, async () => {
+      const post = await dbGetPost(project.id, postId);
+      const wasPublished = post && !post.draft;
 
-    const existsOnDisk = await postFileExists(project.id, postId);
-    if (!existsOnDisk) {
-      await dbDeletePost(project.id, postId);
-      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
-      return;
-    }
-
-    const prefs = this.config.getPrefs();
-    const token = await ensureGitToken(project.id);
-    if (!token) {
-      console.error(`[syncer] no git token for deletion of ${postId}`);
-      await dbDeletePost(project.id, postId);
-      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
-      return;
-    }
-
-    const username = getUsername();
-    const ts = commitTimestamp();
-    const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
-
-    const adapter = await createSyncAdapter(project, prefs);
-    await adapter.commitDeletion(project.id, postId, message, token);
-    await dbDeletePost(project.id, postId);
-
-    this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
-
-    if (wasPublished) {
-      try {
-        await adapter.mergeToMain(project.id, token);
-      } catch (err) {
-        console.error(
-          `[syncer] merge after deletion failed for ${project.id}:`,
-          err,
-        );
+      const existsOnDisk = await postFileExists(project.id, postId);
+      if (!existsOnDisk) {
+        await dbDeletePost(project.id, postId);
+        this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+        return;
       }
-    }
+
+      const prefs = this.config.getPrefs();
+      const token = await ensureGitToken(project.id);
+      if (!token) {
+        console.error(`[syncer] no git token for deletion of ${postId}`);
+        await dbDeletePost(project.id, postId);
+        this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+        return;
+      }
+
+      const username = getUsername();
+      const ts = commitTimestamp();
+      const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
+
+      const adapter = await createSyncAdapter(project, prefs);
+      await adapter.commitDeletion(project.id, postId, message, token);
+      await dbDeletePost(project.id, postId);
+
+      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+
+      if (wasPublished) {
+        try {
+          await adapter.mergeToMain(project.id, token);
+        } catch (err) {
+          console.error(
+            `[syncer] merge after deletion failed for ${project.id}:`,
+            err,
+          );
+        }
+      }
+    });
   }
 
   // ── Hooks ──
@@ -298,6 +340,14 @@ export class Syncer {
           extra: { ...post.extra },
           dirty: false,
         };
+
+        // Guard: never overwrite a locally-dirty post with stale remote data
+        const local = await dbGetPost(projectId, record.id);
+        if (local?.dirty) {
+          records.push(local);
+          continue;
+        }
+
         await dbSavePost(record);
         records.push(record);
         this.#runAfterSyncHooks(projectId, record.id, record);
@@ -317,7 +367,7 @@ export class Syncer {
 
       for (const entry of entries) {
         if (entry.status !== "ready") continue;
-        await this.syncDirtyPosts(entry.id);
+        await this.push(entry);
       }
     } finally {
       this.syncingAll = false;
@@ -331,7 +381,7 @@ export class Syncer {
       this.#syncAllDirty()
         .catch(() => {})
         .finally(() => this.#schedule());
-    }, 60_000);
+    }, 10_000);
   }
 
   #clearTimer() {

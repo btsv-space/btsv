@@ -10,9 +10,11 @@ export enum Route {
 
 export enum SyncState {
   SYNCED = "synced",
+  SYNCING_PULL = "syncing-pull",
+  SYNCING_PUSH = "syncing-push",
   DIRTY = "dirty",
-  SYNCING = "syncing",
   ERROR = "error",
+  CONFLICT = "conflict",
 }
 
 // ── Interfaces ─────────────────────────────────────
@@ -26,6 +28,11 @@ export interface IProject {
   id: string;
   name: string;
   repoUrl: string;
+}
+
+export interface ISyncStatus {
+  state: SyncState;
+  errorMsg: string;
 }
 
 export interface IUserPreferences {

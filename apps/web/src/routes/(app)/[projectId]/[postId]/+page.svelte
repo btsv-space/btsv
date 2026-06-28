@@ -5,11 +5,11 @@
   import { posts } from "$lib/stores/posts.svelte";
   import { loadPosts } from "$lib/stores/syncer.svelte";
   import { syncer } from "$lib/stores/syncer.svelte";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { getProject } from "$lib/stores/projects.svelte";
   import { readPostContent } from "$lib/fs";
   import { parseMdx } from "$lib/parser";
   import { DebouncedSaver } from "$lib/saver";
-  import type { IPostRecord, TProjectEntry } from "$lib/shared/types";
+  import type { IPostRecord } from "$lib/shared/types";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
@@ -31,7 +31,7 @@
   }
 
   async function deletePost(pid: string, id: string): Promise<void> {
-    const project = projects.value.find((p: TProjectEntry) => p.id === pid);
+    const project = getProject(pid);
     if (!project) {
       console.error(`[post] cannot delete ${id}: project ${pid} not found`);
       return;
@@ -78,7 +78,8 @@
     if (saver) {
       await saver.flush();
     }
-    await syncer.syncDirtyPosts(projectId);
+    const project = getProject(projectId);
+    if (project) await syncer.push(project);
   }
 
   async function handleBack() {
@@ -113,7 +114,7 @@
   }
 
   onMount(async () => {
-    loadPosts(projectId, true);
+    await loadPosts(projectId, true);
     if (!workingPost) {
       goto(`/${projectId}`);
       return;
@@ -164,7 +165,10 @@
 
   onDestroy(() => {
     unregisterHook?.();
-    saver?.flush().then(() => syncer.syncDirtyPosts(projectId));
+    saver?.flush().then(() => {
+      const project = getProject(projectId);
+      if (project) syncer.push(project);
+    });
   });
 
   $effect(() => {

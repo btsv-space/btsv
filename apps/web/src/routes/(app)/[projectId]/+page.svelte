@@ -2,12 +2,12 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { getProject } from "$lib/stores/projects.svelte";
   import { posts } from "$lib/stores/posts.svelte";
   import { loadPosts } from "$lib/stores/syncer.svelte";
-  import { syncer, syncStates } from "$lib/stores/syncer.svelte";
+  import { syncStatus } from "$lib/stores/syncer.svelte";
   import { dbGetPost, dbSavePost } from "$lib/db";
-  import type { IPostRecord } from "$lib/shared/types";
+  import { SyncState, type IPostRecord } from "$lib/shared/types";
   import { today } from "$lib/shared/utils";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import { FilePlus } from "@lucide/svelte";
@@ -18,13 +18,13 @@
 
   onMount(async () => {
     console.log(`[/:projectId] onMount: loading posts`);
-    loadPosts(projectId, true);
+    await loadPosts(projectId, true);
   });
 
   let retrying = $state(false);
   let retryError = $state("");
 
-  const entry = $derived(projects.value.find((p) => p.id === projectId));
+  const entry = $derived(getProject(projectId));
 
   function formatTimestamp(date: Date): string {
     const pad = (n: number) => n.toString().padStart(2, "0");
@@ -76,11 +76,8 @@
     entry.status = "cloning";
     entry.error = "";
     try {
-      const records = await syncer.pull(entry);
+      await loadPosts(entry.id, true);
       entry.status = "ready";
-      if (records.length > 0) {
-        posts.value = records.sort((a, b) => b.id.localeCompare(a.id));
-      }
     } catch (err) {
       entry.status = "error";
       entry.error = err instanceof Error ? err.message : "Clone failed";
@@ -129,7 +126,7 @@
       <span class="text-sm font-medium">New Post</span>
     </button>
 
-    {#if posts.value.length === 0 && syncStates.get(projectId) !== "syncing"}
+    {#if posts.value.length === 0 && syncStatus.get(projectId)?.state !== SyncState.SYNCING_PULL}
       <p class="text-muted-foreground col-span-full">
         No posts yet. Create your first post to get started.
       </p>

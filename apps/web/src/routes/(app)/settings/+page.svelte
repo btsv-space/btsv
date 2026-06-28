@@ -52,12 +52,15 @@
 
       if (syncType !== prevSyncType) {
         prevSyncType = syncType;
-        for (const p of projects.value) {
-          if (p.status === "ready") {
+        for (const project of projects.value) {
+          if (project.status === "ready") {
             syncer
-              .pull(p)
+              .pull(project)
               .catch((err) =>
-                console.error(`[settings] auto-pull failed for ${p.id}:`, err),
+                console.error(
+                  `[settings] auto-pull failed for ${project.id}:`,
+                  err,
+                ),
               );
           }
         }
@@ -127,7 +130,7 @@
     'saving'
       ? 'bg-muted text-muted-foreground'
       : saveState === 'success'
-        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+        ? 'bg-green-500/20 border-green-500 text-green-500'
         : 'bg-destructive/20 border-destructive text-destructive'}"
   >
     {saveMsg}

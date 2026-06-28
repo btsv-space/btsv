@@ -6,6 +6,7 @@ import type { ISyncAdapter } from "$lib/shared/types";
 const {
   mockGetDirtyPosts,
   mockSavePost,
+  mockGetPost,
   mockSerializeMdx,
   mockComputeSaveDates,
   mockParseMdx,
@@ -23,6 +24,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetDirtyPosts: vi.fn(),
   mockSavePost: vi.fn(),
+  mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
   mockComputeSaveDates: vi.fn(),
   mockParseMdx: vi.fn(),
@@ -43,7 +45,7 @@ vi.mock("$lib/db", () => ({
   dbGetDirtyPosts: mockGetDirtyPosts,
   dbSavePost: mockSavePost,
   dbDeletePost: vi.fn(),
-  dbGetPost: vi.fn(),
+  dbGetPost: mockGetPost,
 }));
 
 vi.mock("$lib/parser", () => ({
@@ -94,13 +96,11 @@ function makeDirtyPost(overrides: Partial<IPostRecord> = {}): IPostRecord {
 }
 
 function makeConfig(getProjects?: () => TProjectEntry[]) {
-  const onStateChange = vi.fn();
-  const onError = vi.fn();
+  const onSyncStatus = vi.fn();
   return {
     getPrefs: () => ({ syncType: "git" as TSyncType, proxyUrl: "" }),
     getProjects: getProjects ?? (() => []),
-    onStateChange,
-    onError,
+    onSyncStatus,
   };
 }
 
@@ -148,6 +148,7 @@ describe("Syncer", () => {
 
     mockGetDirtyPosts.mockReset();
     mockSavePost.mockReset();
+    mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
     mockComputeSaveDates.mockReset();
     mockDecryptToken.mockReset();
@@ -296,14 +297,17 @@ describe("Syncer", () => {
     });
   });
 
-  describe("syncDirtyPosts", () => {
+  describe("push", () => {
     it("returns true when no dirty posts", async () => {
       mockGetDirtyPosts.mockResolvedValue([]);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(config.onStateChange).toHaveBeenCalledWith("proj-1", "synced");
+      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
+        state: "synced",
+        errorMsg: "",
+      });
       expect(mockSavePost).not.toHaveBeenCalled();
     });
 
@@ -332,27 +336,25 @@ describe("Syncer", () => {
       expect(mockSavePost).toHaveBeenCalledWith(post);
     });
 
-    it("transitions sync state: syncing → synced", async () => {
+    it("transitions sync status: syncing-push → synced", async () => {
       const post = makeDirtyPost();
       mockGetDirtyPosts.mockResolvedValue([post]);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(config.onStateChange).toHaveBeenCalledTimes(2);
-      expect(config.onStateChange).toHaveBeenNthCalledWith(
-        1,
-        "proj-1",
-        "syncing",
-      );
-      expect(config.onStateChange).toHaveBeenNthCalledWith(
-        2,
-        "proj-1",
-        "synced",
-      );
+      expect(config.onSyncStatus).toHaveBeenCalledTimes(2);
+      expect(config.onSyncStatus).toHaveBeenNthCalledWith(1, "proj-1", {
+        state: "syncing-push",
+        errorMsg: "",
+      });
+      expect(config.onSyncStatus).toHaveBeenNthCalledWith(2, "proj-1", {
+        state: "synced",
+        errorMsg: "",
+      });
     });
 
-    it("sets error state when commit fails", async () => {
+    it("sets error status when commit fails", async () => {
       const post = makeDirtyPost();
       mockGetDirtyPosts.mockResolvedValue([post]);
       mockAdapterCommitAndPush.mockRejectedValue(new Error("network error"));
@@ -360,8 +362,10 @@ describe("Syncer", () => {
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(config.onStateChange).toHaveBeenCalledWith("proj-1", "error");
-      expect(config.onError).toHaveBeenCalledWith("proj-1", "network error");
+      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
+        state: "error",
+        errorMsg: "network error",
+      });
     });
 
     it("continues to next post when one fails", async () => {
@@ -443,16 +447,75 @@ describe("Syncer", () => {
     });
   });
 
+  describe("pull serialization", () => {
+    it("serializes concurrent pull calls for the same project", async () => {
+      let pullResolve: () => void;
+      const pullPromise = new Promise<void>((r) => {
+        pullResolve = r;
+      });
+      const order: string[] = [];
+
+      mockAdapterCheckRemote.mockImplementation(async () => {
+        order.push("checkRemote");
+        await pullPromise;
+        return { hasChanges: false };
+      });
+
+      const first = syncer.pull(makeMockProjectEntry());
+      const second = syncer.pull(makeMockProjectEntry());
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(order).toEqual(["checkRemote"]);
+
+      pullResolve!();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(order).toEqual(["checkRemote", "checkRemote"]);
+
+      await first;
+      await second;
+    });
+  });
+
+  describe("parseAndSave guard", () => {
+    it("does not overwrite locally-dirty post during pull", async () => {
+      mockGetDirtyPosts.mockResolvedValue([]);
+      mockAdapterPull.mockResolvedValue([
+        { id: "post-1", content: "# Old remote content" },
+      ]);
+      // Local post is dirty — should be preserved
+      const localDirty = makeDirtyPost({ id: "post-1", dirty: true });
+      mockGetPost.mockResolvedValue(localDirty);
+
+      const result = await syncer.pull(makeMockProjectEntry());
+
+      // dbSavePost should NOT be called for the remote version
+      expect(mockSavePost).not.toHaveBeenCalled();
+      // Returned records should include the local dirty post
+      expect(result).toHaveLength(1);
+      expect(result[0].dirty).toBe(true);
+    });
+
+    it("stores remote version when local post is clean", async () => {
+      mockGetDirtyPosts.mockResolvedValue([]);
+      mockAdapterPull.mockResolvedValue([
+        { id: "post-1", content: "# Remote content" },
+      ]);
+      const localClean = makeDirtyPost({ id: "post-1", dirty: false });
+      mockGetPost.mockResolvedValue(localClean);
+
+      const result = await syncer.pull(makeMockProjectEntry());
+
+      expect(mockSavePost).toHaveBeenCalledTimes(1);
+      expect(result).toHaveLength(1);
+      expect(result[0].dirty).toBe(false);
+    });
+  });
+
   describe("pull", () => {
     it("skips pull when checkRemote returns false", async () => {
       mockAdapterCheckRemote.mockResolvedValue({ hasChanges: false });
-      const project = {
-        id: "proj-1",
-        name: "Test",
-        repoUrl: "https://example.com/repo.git",
-      };
 
-      const result = await syncer.pull(project);
+      const result = await syncer.pull(makeMockProjectEntry());
 
       expect(mockAdapterCheckRemote).toHaveBeenCalledWith(
         "proj-1",
@@ -465,13 +528,8 @@ describe("Syncer", () => {
     it("proceeds with pull when checkRemote returns true", async () => {
       mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
       mockAdapterPull.mockResolvedValue([{ id: "post-1", content: "# Hello" }]);
-      const project = {
-        id: "proj-1",
-        name: "Test",
-        repoUrl: "https://example.com/repo.git",
-      };
 
-      const result = await syncer.pull(project);
+      const result = await syncer.pull(makeMockProjectEntry());
 
       expect(mockAdapterCheckRemote).toHaveBeenCalledWith(
         "proj-1",
@@ -484,13 +542,11 @@ describe("Syncer", () => {
 
     it("with tokenOverride always proceeds without checkRemote", async () => {
       mockAdapterPull.mockResolvedValue([{ id: "post-1", content: "# Hello" }]);
-      const project = {
-        id: "proj-1",
-        name: "Test",
-        repoUrl: "https://example.com/repo.git",
-      };
 
-      const result = await syncer.pull(project, "override-token");
+      const result = await syncer.pull(
+        makeMockProjectEntry(),
+        "override-token",
+      );
 
       expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
       expect(mockAdapterPull).toHaveBeenCalledWith("proj-1", "override-token");
@@ -499,13 +555,8 @@ describe("Syncer", () => {
 
     it("returns empty when no git token available", async () => {
       mockEnsureGitToken.mockResolvedValue("");
-      const project = {
-        id: "proj-1",
-        name: "Test",
-        repoUrl: "https://example.com/repo.git",
-      };
 
-      const result = await syncer.pull(project);
+      const result = await syncer.pull(makeMockProjectEntry());
 
       expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
       expect(result).toEqual([]);
@@ -518,7 +569,7 @@ describe("Syncer", () => {
       delete (globalThis as Record<string, unknown>).window;
     });
 
-    it("calls syncDirtyPosts on start via syncAllDirty", async () => {
+    it("calls push on start via syncAllDirty", async () => {
       const post = makeDirtyPost();
       mockGetDirtyPosts.mockResolvedValue([post]);
 

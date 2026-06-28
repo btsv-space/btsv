@@ -41,7 +41,7 @@
 </svelte:head>
 
 <header
-  class="flex items-center justify-between px-4 py-3 bg-card max-w-240 mx-auto"
+  class="flex items-center justify-between px-4 py-4 bg-card max-w-240 mx-auto"
 >
   <ProjectNav />
   <nav class="flex items-center gap-3 text-sm">
