@@ -324,8 +324,8 @@ func TestCreateUserPreferences(t *testing.T) {
 	if prefs == nil {
 		t.Fatal("expected preferences to exist after user creation")
 	}
-	if prefs.SyncType != "git" {
-		t.Fatalf("expected default sync_type 'git', got '%s'", prefs.SyncType)
+	if prefs.SyncType != "api" {
+		t.Fatalf("expected default sync_type 'api', got '%s'", prefs.SyncType)
 	}
 }
 

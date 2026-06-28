@@ -93,7 +93,7 @@ export async function logout() {
     posts.value = [];
     projects.value = [];
     syncStatus.clear();
-    prefs.value = { syncType: "git" as TSyncType, proxyUrl: "" };
+    prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
     goto(Route.LOGIN, { replaceState: true });
   }
 }

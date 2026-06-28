@@ -66,7 +66,7 @@ func (db *DB) migrate() error {
 
 		CREATE TABLE IF NOT EXISTS user_preferences (
 			user_id   TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-			sync_type TEXT NOT NULL DEFAULT 'git',
+			sync_type TEXT NOT NULL DEFAULT 'api',
 			proxy_url TEXT NOT NULL DEFAULT ''
 		);
 	`)

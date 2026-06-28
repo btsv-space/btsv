@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { fly } from "svelte/transition";
   import { api } from "$lib/api";
   import { prefs } from "$lib/stores/prefs.svelte";
@@ -11,11 +10,11 @@
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
-  let syncType = $state<TSyncType>("git");
-  let proxyUrl = $state("");
+  let syncType = $state<TSyncType>(prefs.value.syncType);
+  let proxyUrl = $state(prefs.value.proxyUrl);
   let saveState = $state<SaveState>("idle");
   let saveMsg = $state("");
-  let prevSyncType = $state<TSyncType>("git");
+  let prevSyncType = $state<TSyncType>(prefs.value.syncType);
 
   let dismissTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -32,12 +31,6 @@
       dismissTimeout = setTimeout(dismiss, 3000);
     }
   }
-
-  onMount(async () => {
-    syncType = prefs.value.syncType;
-    proxyUrl = prefs.value.proxyUrl;
-    prevSyncType = prefs.value.syncType;
-  });
 
   async function handleChange() {
     showToast("saving", "Saving...");
