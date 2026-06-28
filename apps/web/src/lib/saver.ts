@@ -3,7 +3,7 @@ import deepEqual from "fast-deep-equal";
 import {
   CONTENT_KEYS,
   type IPostRecord,
-  type IDebouncedSaverParams,
+  type IDebouncedSaverConfig,
   type TContentKey,
 } from "$lib/shared/types";
 import { dbSavePost } from "$lib/db";
@@ -37,28 +37,28 @@ export class DebouncedSaver {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lastSaved: IPostRecord | null;
   private syncBaseline: IPostRecord | null;
-  private params: IDebouncedSaverParams;
+  private config: IDebouncedSaverConfig;
 
-  constructor(params: IDebouncedSaverParams) {
-    this.params = params;
-    this.lastSaved = params.initialPost
-      ? JSON.parse(JSON.stringify(params.initialPost))
+  constructor(config: IDebouncedSaverConfig) {
+    this.config = config;
+    this.lastSaved = config.initialPost
+      ? JSON.parse(JSON.stringify(config.initialPost))
       : null;
     // TODO: Do we need to keep a copy of syncBaseline? Might get stale. Can we read fs directly?
-    this.syncBaseline = params.gitBaseline
-      ? JSON.parse(JSON.stringify(params.gitBaseline))
+    this.syncBaseline = config.gitBaseline
+      ? JSON.parse(JSON.stringify(config.gitBaseline))
       : null;
   }
 
   async #write(saved: IPostRecord) {
     await dbSavePost(saved);
     this.lastSaved = saved;
-    this.params.onSave(saved);
+    this.config.onSave(saved);
   }
 
   async #doSave() {
-    const workingPost = this.params.getWorkingPost();
-    const tagsInput = this.params.getTagsInput();
+    const workingPost = this.config.getWorkingPost();
+    const tagsInput = this.config.getTagsInput();
     if (!workingPost) return;
 
     const normalized = normalizePost(workingPost, tagsInput);
@@ -83,7 +83,7 @@ export class DebouncedSaver {
         : true;
       await this.#write({ ...normalized, dirty: needsPush });
     } catch (err) {
-      this.params.onError(err instanceof Error ? err.message : "Save failed");
+      this.config.onError(err instanceof Error ? err.message : "Save failed");
     }
   }
 
@@ -108,10 +108,10 @@ export class DebouncedSaver {
   }
 
   isUnsaved(): boolean {
-    const wp = this.params.getWorkingPost();
-    const ti = this.params.getTagsInput();
-    if (!wp || !this.lastSaved) return false;
-    return !contentEqual(normalizePost(wp, ti), this.lastSaved);
+    const workingPost = this.config.getWorkingPost();
+    const tagsInput = this.config.getTagsInput();
+    if (!workingPost || !this.lastSaved) return false;
+    return !contentEqual(normalizePost(workingPost, tagsInput), this.lastSaved);
   }
 
   updateBaseline(syncedPost: IPostRecord) {

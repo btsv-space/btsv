@@ -8,33 +8,25 @@ import { postFileExists } from "$lib/fs";
 import {
   SyncState,
   type IProject,
-  type ISyncStatus,
-  type IUserPreferences,
   type IPostEntry,
   type IPostRecord,
-  type TProjectEntry,
   type TSyncHook,
+  type ISyncerConfig,
 } from "$lib/shared/types";
 
 function getUsername(): string {
   return currentUser.value?.username ?? "unknown";
 }
 
-export interface SyncerConfig {
-  getPrefs: () => IUserPreferences;
-  getProjects: () => TProjectEntry[];
-  onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
-}
-
 export class Syncer {
-  private config: SyncerConfig;
+  private config: ISyncerConfig;
   private started = false;
   private syncingAll = false;
   private projectQueue = new Map<string, Promise<unknown>>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private afterSyncHooks = new Set<TSyncHook>();
 
-  constructor(config: SyncerConfig) {
+  constructor(config: ISyncerConfig) {
     this.config = config;
   }
 

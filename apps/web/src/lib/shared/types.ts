@@ -138,7 +138,7 @@ export interface ICloneOpts {
   onDebug: (msg: string) => void;
 }
 
-export interface IDebouncedSaverParams {
+export interface IDebouncedSaverConfig {
   projectId: string;
   getWorkingPost: () => IPostRecord | null;
   getTagsInput: () => string;
@@ -146,6 +146,12 @@ export interface IDebouncedSaverParams {
   gitBaseline?: IPostRecord | null;
   onSave: (post: IPostRecord) => void;
   onError: (error: string) => void;
+}
+
+export interface ISyncerConfig {
+  getPrefs: () => IUserPreferences;
+  getProjects: () => TProjectEntry[];
+  onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
 }
 
 export interface IParseResult {
