@@ -193,7 +193,7 @@ describe("Syncer", () => {
     mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
     mockAdapterPull.mockResolvedValue([]);
     mockAdapterInitialPull.mockResolvedValue({
-      entries: [],
+      postEntries: [],
       lastCommitTime: undefined,
     });
     mockEnsureGitToken.mockResolvedValue("decrypted-token");
@@ -741,7 +741,7 @@ describe("Syncer", () => {
 
     it("persists headSha to project + IDB after initialPull", async () => {
       mockAdapterInitialPull.mockResolvedValue({
-        entries: [],
+        postEntries: [],
         lastCommitTime: undefined,
         headSha: "sha-init",
       });

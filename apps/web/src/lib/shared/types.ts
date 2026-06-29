@@ -75,7 +75,7 @@ export interface ISyncAdapter {
     projectId: string,
     gitToken: string,
   ): Promise<{
-    entries: IPostEntry[];
+    postEntries: IPostEntry[];
     lastCommitTime?: number;
     headSha?: string;
   }>;
@@ -170,13 +170,6 @@ export interface ISyncerConfig {
 }
 
 export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
-
-export interface IDocument {
-  projectId: string;
-  path: string;
-  content: string;
-  updatedAt: number;
-}
 
 // ── Type aliases ───────────────────────────────────
 

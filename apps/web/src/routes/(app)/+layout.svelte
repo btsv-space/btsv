@@ -61,7 +61,7 @@
       const apiProjects = await api.projects.list();
       console.log(`[/:layout] API returned ${apiProjects.length} project(s)`);
 
-      const entries: TProjectEntry[] = await Promise.all(
+      const projectEntries: TProjectEntry[] = await Promise.all(
         apiProjects.map(async (apiProject) => {
           const existing = getProject(apiProject.id);
           if (existing) {
@@ -79,17 +79,17 @@
       );
 
       console.log(
-        "[/:layout] entries:",
-        entries.map((e) => ({ id: e.id, status: e.status })),
+        "[/:layout] projectEntries:",
+        projectEntries.map((e) => ({ id: e.id, status: e.status })),
       );
-      projects.value = entries;
+      projects.value = projectEntries;
       console.log("[/:layout] projectsReady=true");
 
       // Persist project list
-      await dbSaveProjects(entries);
+      await dbSaveProjects(projectEntries);
 
       // Trigger clones for newly-seen projects — fire-and-forget
-      // IMPORTANT: iterate projects.value (not entries) so mutations go through $state proxy
+      // IMPORTANT: iterate projects.value (not projectEntries) so mutations go through $state proxy
       console.log("[/:layout] checking for unknown projects to clone...");
       for (const project of projects.value) {
         console.log(

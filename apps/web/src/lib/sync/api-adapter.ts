@@ -83,7 +83,7 @@ export class ApiAdapter implements ISyncAdapter {
     projectId: string,
     gitToken: string,
   ): Promise<{
-    entries: IPostEntry[];
+    postEntries: IPostEntry[];
     lastCommitTime?: number;
     headSha?: string;
   }> {
@@ -126,8 +126,8 @@ export class ApiAdapter implements ISyncAdapter {
       }
     }
 
-    const entries = await this.pull(projectId, gitToken);
-    return { entries, lastCommitTime, headSha };
+    const postEntries = await this.pull(projectId, gitToken);
+    return { postEntries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {
@@ -352,21 +352,21 @@ export class ApiAdapter implements ISyncAdapter {
       throw new Error(`GraphQL pull errors: ${JSON.stringify(json.errors)}`);
     }
 
-    const entries: IPostEntry[] = [];
+    const postEntries: IPostEntry[] = [];
     const tree = json?.data?.repository?.object?.entries ?? [];
 
-    for (const entry of tree) {
-      if (!entry.name.endsWith(POST_EXT)) continue;
+    for (const treeEntry of tree) {
+      if (!treeEntry.name.endsWith(POST_EXT)) continue;
 
-      const id = entry.name.replace(POST_EXT, "");
-      const content: string = entry.object?.text ?? "";
+      const id = treeEntry.name.replace(POST_EXT, "");
+      const content: string = treeEntry.object?.text ?? "";
 
       await writePostFile(projectId, id, content);
 
-      entries.push({ id, content });
+      postEntries.push({ id, content });
     }
 
-    return entries;
+    return postEntries;
   }
 
   async commitAndPush(

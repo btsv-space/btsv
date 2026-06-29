@@ -100,7 +100,7 @@ export class GitAdapter implements ISyncAdapter {
     projectId: string,
     gitToken: string,
   ): Promise<{
-    entries: IPostEntry[];
+    postEntries: IPostEntry[];
     lastCommitTime?: number;
     headSha?: string;
   }> {
@@ -176,7 +176,7 @@ export class GitAdapter implements ISyncAdapter {
       }
     }
 
-    const [logResult, entries] = await Promise.all([
+    const [logResult, postEntries] = await Promise.all([
       git.log({ fs, dir, ref: this.gitBranch, depth: 1 }).catch(() => null),
       this.pull(projectId, gitToken),
     ]);
@@ -197,7 +197,7 @@ export class GitAdapter implements ISyncAdapter {
       headSha = logResult?.[0]?.oid;
     }
 
-    return { entries, lastCommitTime, headSha };
+    return { postEntries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {
@@ -293,18 +293,18 @@ export class GitAdapter implements ISyncAdapter {
 
     await ensureRepoHasCommit(fs, dir, git);
 
-    const entries = await readPostFiles(fs, dir);
+    const postEntries = await readPostFiles(fs, dir);
 
     if (preIds.size > 0) {
-      const postIds = new Set(entries.map((e) => e.id));
+      const postIds = new Set(postEntries.map((e) => e.id));
       for (const id of preIds) {
         if (!postIds.has(id)) {
-          entries.push({ id, deleted: true });
+          postEntries.push({ id, deleted: true });
         }
       }
     }
 
-    return entries;
+    return postEntries;
   }
 
   async commitAndPush(
@@ -466,7 +466,7 @@ async function readPostFiles(
   dir: string,
   idOnly = false,
 ): Promise<IPostEntry[]> {
-  const entries: IPostEntry[] = [];
+  const postEntries: IPostEntry[] = [];
 
   async function walk(current: string): Promise<void> {
     let names: string[];
@@ -493,13 +493,13 @@ async function readPostFiles(
         if (relative.includes("/")) {
           const id = relative.split("/").pop()!.replace(POST_EXT, "");
           if (idOnly) {
-            entries.push({ id });
+            postEntries.push({ id });
           } else {
             const content = (await fs.promises.readFile(
               full,
               "utf8",
             )) as string;
-            entries.push({ id, content });
+            postEntries.push({ id, content });
           }
         }
       }
@@ -507,5 +507,5 @@ async function readPostFiles(
   }
 
   await walk(dir);
-  return entries;
+  return postEntries;
 }

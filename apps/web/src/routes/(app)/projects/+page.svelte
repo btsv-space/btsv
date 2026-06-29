@@ -48,24 +48,23 @@
       return null;
     }
 
-    const entry: TProjectEntry = {
-      ...project,
-      status: "cloning",
-      error: "",
-    };
+    projects.value = [
+      { ...project, status: "cloning", error: "" } as TProjectEntry,
+      ...projects.value,
+    ];
 
-    projects.value = [entry, ...projects.value];
+    const projectEntry = getProject(project.id);
+    if (!projectEntry) {
+      formSubmitting = false;
+      return null;
+    }
 
     try {
-      await syncer.initialPull(entry, token);
-      const proxied = getProject(entry.id);
-      if (proxied) proxied.status = "ready";
+      await syncer.initialPull(projectEntry, token);
+      projectEntry.status = "ready";
     } catch (err) {
-      const proxied = getProject(entry.id);
-      if (proxied) {
-        proxied.status = "error";
-        proxied.error = err instanceof Error ? err.message : "Clone failed";
-      }
+      projectEntry.status = "error";
+      projectEntry.error = err instanceof Error ? err.message : "Clone failed";
       formSubmitting = false;
       return null;
     }

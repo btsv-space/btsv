@@ -22,11 +22,11 @@ export function normalizePost(
 }
 
 function pickContent(post: IPostRecord): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+  const picked: Record<string, unknown> = {};
   for (const key of Object.keys(CONTENT_KEYS) as TContentKey[]) {
-    result[key] = post[key];
+    picked[key] = post[key];
   }
-  return result;
+  return picked;
 }
 
 export function contentEqual(a: IPostRecord, b: IPostRecord): boolean {

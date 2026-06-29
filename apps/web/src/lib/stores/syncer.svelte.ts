@@ -33,9 +33,9 @@ export async function loadPosts(
   projectId: string,
   forcePull = false,
 ): Promise<void> {
-  const cached = await dbGetPosts(projectId);
-  if (cached.length > 0) {
-    posts.value = cached.sort((a, b) => b.id.localeCompare(a.id));
+  const dbPosts = await dbGetPosts(projectId);
+  if (dbPosts.length > 0) {
+    posts.value = dbPosts.sort((a, b) => b.id.localeCompare(a.id));
   }
 
   const project = getProject(projectId);
@@ -49,14 +49,14 @@ export async function loadPosts(
   const shouldPull = forcePull || syncTypeChanged;
 
   console.log(
-    `[loadPosts] ${projectId}: cached=${cached.length} syncTypeChanged=${syncTypeChanged} shouldPull=${shouldPull}`,
+    `[loadPosts] ${projectId}: cached=${dbPosts.length} syncTypeChanged=${syncTypeChanged} shouldPull=${shouldPull}`,
   );
 
   if (shouldPull) {
     await syncer.pull(project);
-    const afterPull = await dbGetPosts(projectId);
-    if (afterPull.length > 0) {
-      posts.value = afterPull.sort((a, b) => b.id.localeCompare(a.id));
+    const dbPostsAfterPull = await dbGetPosts(projectId);
+    if (dbPostsAfterPull.length > 0) {
+      posts.value = dbPostsAfterPull.sort((a, b) => b.id.localeCompare(a.id));
     }
     console.log(`[loadPosts] ${projectId}: using pulled posts`);
   } else {

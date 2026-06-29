@@ -24,7 +24,7 @@
   let retrying = $state(false);
   let retryError = $state("");
 
-  const entry = $derived(getProject(projectId));
+  const projectEntry = $derived(getProject(projectId));
 
   function formatTimestamp(date: Date): string {
     const pad = (n: number) => n.toString().padStart(2, "0");
@@ -44,7 +44,7 @@
     const id = await generateUniquePostId(projectId);
     const todayStr = today();
 
-    const record: IPostRecord = {
+    const newPost: IPostRecord = {
       projectId,
       id,
       slug: "",
@@ -59,8 +59,8 @@
       dirty: false,
     };
 
-    await dbSavePost(record);
-    posts.value = [record, ...posts.value];
+    await dbSavePost(newPost);
+    posts.value = [newPost, ...posts.value];
 
     return { id };
   }
@@ -68,20 +68,20 @@
   async function handleRetry() {
     retrying = true;
     retryError = "";
-    if (!entry) {
+    if (!projectEntry) {
       retrying = false;
       return;
     }
 
-    entry.status = "cloning";
-    entry.error = "";
+    projectEntry.status = "cloning";
+    projectEntry.error = "";
     try {
-      await loadPosts(entry.id, true);
-      entry.status = "ready";
+      await loadPosts(projectEntry.id, true);
+      projectEntry.status = "ready";
     } catch (err) {
-      entry.status = "error";
-      entry.error = err instanceof Error ? err.message : "Clone failed";
-      retryError = entry.error;
+      projectEntry.status = "error";
+      projectEntry.error = err instanceof Error ? err.message : "Clone failed";
+      retryError = projectEntry.error;
     }
 
     retrying = false;
@@ -97,15 +97,15 @@
   }
 </script>
 
-{#if !entry}
+{#if !projectEntry}
   <p class="text-muted-foreground mt-4">Loading project...</p>
-{:else if entry.status === "cloning"}
+{:else if projectEntry.status === "cloning"}
   <p class="text-muted-foreground mt-4">Cloning repository...</p>
-{:else if entry.status === "error"}
+{:else if projectEntry.status === "error"}
   <div class="card bg-destructive/5 border-destructive/20 mt-6">
     <p class="font-semibold text-destructive m-0 mb-2">Clone failed</p>
     <p class="text-sm text-muted-foreground m-0 mb-3 font-mono">
-      {entry.error}
+      {projectEntry.error}
     </p>
     {#if retryError}
       <p class="text-sm text-muted-foreground m-0 mb-3 font-mono">
@@ -116,7 +116,7 @@
       {retrying ? "Retrying..." : "Retry Clone"}
     </button>
   </div>
-{:else if entry.status === "ready"}
+{:else if projectEntry.status === "ready"}
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     <button
       class="hidden md:flex card border-dashed border-2 border-muted-foreground/30 hover:border-primary/50 flex-col items-center justify-center gap-2 p-6 text-muted-foreground hover:text-primary transition-colors cursor-pointer min-h-[120px]"

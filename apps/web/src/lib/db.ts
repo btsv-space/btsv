@@ -56,8 +56,8 @@ export async function dbGetPosts(projectId: string): Promise<IPostRecord[]> {
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const posts = await store.getAll();
-  return posts.filter((p) => p.projectId === projectId);
+  const postRecords = await store.getAll();
+  return postRecords.filter((p) => p.projectId === projectId);
 }
 
 export async function dbGetPost(
@@ -88,8 +88,8 @@ export async function dbGetDirtyPosts(
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const posts = await store.getAll();
-  return posts.filter((p) => p.projectId === projectId && p.dirty);
+  const postRecords = await store.getAll();
+  return postRecords.filter((p) => p.projectId === projectId && p.dirty);
 }
 
 // ── Projects cache ────────────────────────────────
@@ -99,12 +99,14 @@ export async function dbGetProjects(): Promise<TProjectEntry[]> {
   return db.getAll("projects");
 }
 
-export async function dbSaveProjects(projects: TProjectEntry[]): Promise<void> {
+export async function dbSaveProjects(
+  projectEntries: TProjectEntry[],
+): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("projects", "readwrite");
   const store = tx.objectStore("projects");
   await store.clear();
-  for (const p of projects) {
+  for (const p of projectEntries) {
     await store.put({ ...p });
   }
   await tx.done;
@@ -122,7 +124,7 @@ export async function dbGetPrefs(): Promise<IUserPreferences | undefined> {
   return db.get("preferences", "default");
 }
 
-export async function dbSavePrefs(prefs: IUserPreferences): Promise<void> {
+export async function dbSavePrefs(userPrefs: IUserPreferences): Promise<void> {
   const db = await getDB();
-  await db.put("preferences", { ...prefs, id: "default" });
+  await db.put("preferences", { ...userPrefs, id: "default" });
 }
