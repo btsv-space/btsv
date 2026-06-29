@@ -23,6 +23,7 @@ const {
   mockGetDEK,
   mockEnsureGitToken,
   mockAdapterCommitAndPush,
+  mockAdapterCommitDeletion,
   mockAdapterCheckRemote,
   mockAdapterPull,
   mockAdapterInitialPull,
@@ -45,6 +46,7 @@ const {
   mockGetDEK: vi.fn(),
   mockEnsureGitToken: vi.fn().mockResolvedValue("decrypted-token"),
   mockAdapterCommitAndPush: vi.fn(),
+  mockAdapterCommitDeletion: vi.fn(),
   mockAdapterCheckRemote: vi.fn(),
   mockAdapterPull: vi.fn(),
   mockAdapterInitialPull: vi.fn(),
@@ -130,7 +132,7 @@ function makeMockAdapter(): ISyncAdapter {
     initialPull: mockAdapterInitialPull,
     mergeToMain: mockAdapterMergeToMain,
     commitAndPush: mockAdapterCommitAndPush,
-    commitDeletion: vi.fn(),
+    commitDeletion: mockAdapterCommitDeletion,
   };
 }
 
@@ -166,6 +168,7 @@ describe("Syncer", () => {
     mockCreateSyncAdapter.mockReset();
 
     mockGetDirtyPosts.mockReset();
+    mockGetDirtyPosts.mockResolvedValue([]);
     mockSavePost.mockReset();
     mockSaveProject.mockReset();
     mockDeletePost.mockReset();
@@ -177,6 +180,7 @@ describe("Syncer", () => {
     mockGetSecret.mockReset();
     mockGetDEK.mockReset();
     mockAdapterCommitAndPush.mockReset();
+    mockAdapterCommitDeletion.mockReset();
     mockAdapterCheckRemote.mockReset();
     mockAdapterPull.mockReset();
     mockAdapterInitialPull.mockReset();
@@ -226,6 +230,7 @@ describe("Syncer", () => {
   });
 
   afterEach(() => {
+    syncer.stop();
     vi.useRealTimers();
     vi.clearAllMocks();
   });
@@ -661,6 +666,32 @@ describe("Syncer", () => {
       expect(mockDeletePost).toHaveBeenCalledTimes(1);
       expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
     });
+
+    it("deletes IDB row and persists sha after successful deletion", async () => {
+      mockPostFileExists.mockResolvedValue(true);
+      mockAdapterCommitDeletion.mockResolvedValue("sha-delete");
+      mockGetPost.mockResolvedValue(
+        makeDirtyPost({ id: "post-1", draft: true }),
+      );
+
+      const project = makeMockProjectEntry();
+      await syncer.commitDeletion(project, "post-1");
+
+      expect(mockAdapterCommitDeletion).toHaveBeenCalledWith(
+        "proj-1",
+        "post-1",
+        expect.stringMatching(/-delete-/),
+        "decrypted-token",
+      );
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
+      expect(mockSaveProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "proj-1",
+          storedRemoteSha: "sha-delete",
+        }),
+      );
+    });
   });
 
   describe("pull", () => {
@@ -803,8 +834,7 @@ describe("Syncer", () => {
 
   describe("start / stop", () => {
     afterEach(() => {
-      delete (globalThis as Record<string, unknown>).document;
-      delete (globalThis as Record<string, unknown>).window;
+      syncer.stop();
     });
 
     it("calls push on start via syncAllDirty", async () => {

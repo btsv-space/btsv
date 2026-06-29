@@ -59,7 +59,7 @@ export async function loadPosts(
 
   const getPostsPage = async () => {
     const records = await dbGetPosts(projectId, { limit: pageSize, offset });
-    // this avoid stale concurrent calls from mutating the posts store
+    // this avoids stale concurrent calls from mutating the posts store
     if (controller.signal.aborted) return;
     posts.value = records;
   };

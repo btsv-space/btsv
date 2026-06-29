@@ -17,9 +17,10 @@
 
   console.log(`[/:projectId] mounted: ${projectId}`);
 
-  const currentPage = $derived(
-    Math.max(1, Number(page.url.searchParams.get("page") ?? "1")),
-  );
+  const currentPage = $derived.by(() => {
+    const n = Number(page.url.searchParams.get("page") ?? "1");
+    return Number.isInteger(n) && n > 0 ? n : 1;
+  });
 
   onMount(async () => {
     console.log(`[/:projectId] onMount: loading posts`);
