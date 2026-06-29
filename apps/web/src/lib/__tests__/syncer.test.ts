@@ -206,19 +206,17 @@ describe("Syncer", () => {
     mockCreateSyncAdapter.mockResolvedValue(makeMockAdapter());
 
     mockParseMdx.mockImplementation((_content: string, id: string) => ({
-      post: {
-        id,
-        slug: `slug-${id}`,
-        title: `Title ${id}`,
-        dateCreated: "2026-06-01",
-        dateUpdated: "2026-06-01",
-        datePublished: "2026-06-01",
-        description: "",
-        tags: [],
-        draft: false,
-        body: "content",
-        extra: {},
-      },
+      id,
+      slug: `slug-${id}`,
+      title: `Title ${id}`,
+      dateCreated: "2026-06-01",
+      dateUpdated: "2026-06-01",
+      datePublished: "2026-06-01",
+      description: "",
+      tags: [],
+      draft: false,
+      body: "content",
+      extra: {},
     }));
   });
 

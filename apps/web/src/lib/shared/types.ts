@@ -169,22 +169,7 @@ export interface ISyncerConfig {
   onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
 }
 
-export interface IParseResult {
-  post: Pick<
-    IPostRecord,
-    | "id"
-    | "slug"
-    | "title"
-    | "dateCreated"
-    | "dateUpdated"
-    | "datePublished"
-    | "description"
-    | "tags"
-    | "draft"
-    | "body"
-    | "extra"
-  >;
-}
+export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 
 export interface IDocument {
   projectId: string;

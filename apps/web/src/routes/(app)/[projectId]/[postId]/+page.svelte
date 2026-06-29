@@ -128,7 +128,7 @@
     let gitBaseline: IPostRecord | null = null;
     try {
       const raw = await readPostContent(projectId, postId);
-      const { post: parsed } = parseMdx(raw, postId);
+      const parsed = parseMdx(raw, postId);
       gitBaseline = {
         ...workingPost,
         ...parsed,

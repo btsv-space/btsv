@@ -378,21 +378,12 @@ export class Syncer {
         }
         if (!content) continue;
 
-        const { post } = parseMdx(content, id);
+        const post = parseMdx(content, id);
         const record: IPostRecord = {
           projectId,
-          id: post.id,
-          slug: post.slug,
-          title: post.title,
-          dateCreated: post.dateCreated,
-          dateUpdated: post.dateUpdated,
-          datePublished: post.datePublished,
-          description: post.description,
-          tags: post.tags,
-          draft: post.draft,
-          body: post.body,
-          extra: { ...post.extra },
+          ...post,
           dirty: false,
+          extra: { ...post.extra },
         };
 
         // TODO: will be changed as part of conflict mgmt in sync refactor
