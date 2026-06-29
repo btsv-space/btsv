@@ -143,7 +143,7 @@ export interface IPostRecord extends BtsvPostFrontmatter {
   draft: boolean;
   body: string;
   extra: Record<string, unknown>;
-  dirty: boolean;
+  dirty: 0 | 1;
 }
 
 export interface IGitState {

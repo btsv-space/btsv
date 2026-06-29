@@ -20,7 +20,7 @@ function makePost(overrides: Partial<IPostRecord> = {}): IPostRecord {
     draft: false,
     body: "Some content",
     extra: {},
-    dirty: false,
+    dirty: 0,
     ...overrides,
   };
 }
@@ -87,12 +87,12 @@ describe("contentEqual", () => {
   it("ignores metadata fields (id, dirty, projectId, dateCreated, dateUpdated)", () => {
     const a = makePost({
       id: "a",
-      dirty: true,
+      dirty: 1,
       projectId: "x",
     });
     const b = makePost({
       id: "b",
-      dirty: false,
+      dirty: 0,
       projectId: "y",
     });
     expect(contentEqual(a, b)).toBe(true);
@@ -186,7 +186,7 @@ describe("createDebouncedSaver", () => {
 
     const saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Changed Title");
-    expect(saved.dirty).toBe(true);
+    expect(saved.dirty).toBe(1);
   });
 
   it("debounces: multiple rapid calls only save once", async () => {
@@ -241,7 +241,7 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     let saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Interim Title");
-    expect(saved.dirty).toBe(true);
+    expect(saved.dirty).toBe(1);
 
     // Now revert back to original content
     dbSavePost.mockClear();
@@ -252,7 +252,7 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Hello World");
-    expect(saved.dirty).toBe(false);
+    expect(saved.dirty).toBe(0);
   });
 
   it("updates initialPost after successful save", async () => {
@@ -293,14 +293,14 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     let saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Edited");
-    expect(saved.dirty).toBe(true);
+    expect(saved.dirty).toBe(1);
 
     // Simulate sync to git: update baseline with the actual synced post
     dbSavePost.mockClear();
     params.onSave.mockClear();
-    const syncedPost = {
+    const syncedPost: IPostRecord = {
       ...makePost({ title: "Edited" }),
-      dirty: false,
+      dirty: 0,
     };
     saver.updateBaseline(syncedPost);
 
@@ -313,7 +313,7 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Edited");
-    expect(saved.dirty).toBe(false);
+    expect(saved.dirty).toBe(0);
   });
 
   it("updateBaseline uses the provided post as baseline, not the working post", async () => {
@@ -322,9 +322,9 @@ describe("createDebouncedSaver", () => {
 
     // Working post has 'Edited', but the synced post has different content
     params.setWorkingPost(makePost({ title: "Edited" }));
-    const syncedPost = {
+    const syncedPost: IPostRecord = {
       ...makePost({ title: "SyncedVersion" }),
-      dirty: false,
+      dirty: 0,
     };
     saver.updateBaseline(syncedPost);
 
@@ -333,7 +333,7 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     const saved = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(saved.title).toBe("Edited");
-    expect(saved.dirty).toBe(true);
+    expect(saved.dirty).toBe(1);
 
     // Revert to what was actually synced ('SyncedVersion') — should be clean
     dbSavePost.mockClear();
@@ -343,7 +343,7 @@ describe("createDebouncedSaver", () => {
     expect(dbSavePost).toHaveBeenCalledTimes(1);
     const reverted = dbSavePost.mock.calls[0][0] as IPostRecord;
     expect(reverted.title).toBe("SyncedVersion");
-    expect(reverted.dirty).toBe(false);
+    expect(reverted.dirty).toBe(0);
   });
 
   it("cancel prevents pending debounce from firing", async () => {

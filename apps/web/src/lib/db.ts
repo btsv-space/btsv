@@ -6,14 +6,14 @@ import type {
 } from "$lib/shared/types";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains("documents")) {
             db.createObjectStore("documents", {
@@ -44,6 +44,17 @@ function getDB(): Promise<IDBPDatabase> {
           }
           if (!db.objectStoreNames.contains("preferences")) {
             db.createObjectStore("preferences", { keyPath: "id" });
+          }
+        }
+        if (oldVersion < 5 && tx) {
+          const store = tx.objectStore("posts");
+          if (store.indexNames.contains("by_dirty")) {
+            store.deleteIndex("by_dirty");
+          }
+          if (!store.indexNames.contains("by_project_dirty")) {
+            store.createIndex("by_project_dirty", ["projectId", "dirty"], {
+              unique: false,
+            });
           }
         }
       },
@@ -109,8 +120,10 @@ export async function dbGetDirtyPosts(
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const postRecords = await store.getAll();
-  return postRecords.filter((p) => p.projectId === projectId && p.dirty);
+  const index = store.index("by_project_dirty");
+  const dirty = await index.getAll(IDBKeyRange.only([projectId, 1]));
+  await tx.done;
+  return dirty;
 }
 
 // ── Projects cache ────────────────────────────────

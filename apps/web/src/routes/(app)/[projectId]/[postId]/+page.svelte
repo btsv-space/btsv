@@ -129,7 +129,7 @@
       gitBaseline = {
         ...workingPost,
         ...parsed,
-        dirty: false,
+        dirty: 0,
       };
     } catch {
       // New post — not yet in git

@@ -256,7 +256,7 @@ export class Syncer {
               token,
             );
 
-            post.dirty = false;
+            post.dirty = 0;
             if (commitSha) pushedSha = commitSha;
 
             if (!post.draft) anyPublished = true;
@@ -417,7 +417,7 @@ export class Syncer {
         const post: IPostRecord = {
           projectId,
           ...parsed,
-          dirty: false,
+          dirty: 0,
           extra: { ...parsed.extra },
         };
 

@@ -72,7 +72,7 @@ export class DebouncedSaver {
           this.lastSaved.dirty &&
           contentEqual(normalized, this.syncBaseline)
         ) {
-          await this.#write({ ...normalized, dirty: false });
+          await this.#write({ ...normalized, dirty: 0 });
         }
         return;
       }
@@ -81,7 +81,7 @@ export class DebouncedSaver {
       const needsPush = this.syncBaseline
         ? !contentEqual(normalized, this.syncBaseline)
         : true;
-      await this.#write({ ...normalized, dirty: needsPush });
+      await this.#write({ ...normalized, dirty: needsPush ? 1 : 0 });
     } catch (err) {
       this.config.onError(err instanceof Error ? err.message : "Save failed");
     }
@@ -115,8 +115,6 @@ export class DebouncedSaver {
   }
 
   updateBaseline(syncedPost: IPostRecord) {
-    this.syncBaseline = JSON.parse(
-      JSON.stringify({ ...syncedPost, dirty: false }),
-    );
+    this.syncBaseline = JSON.parse(JSON.stringify({ ...syncedPost, dirty: 0 }));
   }
 }

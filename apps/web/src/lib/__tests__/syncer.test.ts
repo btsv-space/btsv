@@ -111,7 +111,7 @@ function makeDirtyPost(overrides: Partial<IPostRecord> = {}): IPostRecord {
     draft: false,
     body: "Some content",
     extra: {},
-    dirty: true,
+    dirty: 1,
     ...overrides,
   };
 }
@@ -252,7 +252,7 @@ describe("Syncer", () => {
       expect(syncedPost).toMatchObject({
         id: post.id,
         projectId: "proj-1",
-        dirty: false,
+        dirty: 0,
       });
     });
 
@@ -360,7 +360,7 @@ describe("Syncer", () => {
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(post.dirty).toBe(false);
+      expect(post.dirty).toBe(0);
       expect(mockSavePost).toHaveBeenCalledWith(post);
     });
 
@@ -522,7 +522,7 @@ describe("Syncer", () => {
         { id: "post-1", content: "# Old remote content" },
       ]);
       // Local post is dirty — should be preserved
-      const localDirty = makeDirtyPost({ id: "post-1", dirty: true });
+      const localDirty = makeDirtyPost({ id: "post-1", dirty: 1 });
       mockGetPost.mockResolvedValue(localDirty);
 
       const result = await syncer.pull(makeMockProjectEntry());
@@ -531,7 +531,7 @@ describe("Syncer", () => {
       expect(mockSavePost).not.toHaveBeenCalled();
       // Returned records should include the local dirty post
       expect(result).toHaveLength(1);
-      expect(result[0].dirty).toBe(true);
+      expect(result[0].dirty).toBe(1);
     });
 
     it("stores remote version when local post is clean", async () => {
@@ -539,14 +539,14 @@ describe("Syncer", () => {
       mockAdapterPull.mockResolvedValue([
         { id: "post-1", content: "# Remote content" },
       ]);
-      const localClean = makeDirtyPost({ id: "post-1", dirty: false });
+      const localClean = makeDirtyPost({ id: "post-1", dirty: 0 });
       mockGetPost.mockResolvedValue(localClean);
 
       const result = await syncer.pull(makeMockProjectEntry());
 
       expect(mockSavePost).toHaveBeenCalledTimes(1);
       expect(result).toHaveLength(1);
-      expect(result[0].dirty).toBe(false);
+      expect(result[0].dirty).toBe(0);
     });
   });
 
@@ -598,7 +598,7 @@ describe("Syncer", () => {
         { id: "kept", content: "# New content" },
         { id: "gone", deleted: true },
       ]);
-      const localKeptDirty = makeDirtyPost({ id: "kept", dirty: true });
+      const localKeptDirty = makeDirtyPost({ id: "kept", dirty: 1 });
       mockGetPost.mockResolvedValueOnce(localKeptDirty);
 
       const result = await syncer.pull(makeMockProjectEntry());
@@ -608,7 +608,7 @@ describe("Syncer", () => {
       expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "gone");
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("kept");
-      expect(result[0].dirty).toBe(true);
+      expect(result[0].dirty).toBe(1);
     });
 
     it("passes storedRemoteSha + headSha from checkRemote into adapter.pull", async () => {

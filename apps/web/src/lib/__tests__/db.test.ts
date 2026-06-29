@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import "fake-indexeddb/auto";
-import { dbGetPosts, dbSavePost } from "$lib/db";
+import { dbGetPosts, dbSavePost, dbGetDirtyPosts } from "$lib/db";
 import type { IPostRecord } from "$lib/shared/types";
 
 function makePost(
@@ -20,7 +20,7 @@ function makePost(
     draft: false,
     body: "",
     extra: {},
-    dirty: false,
+    dirty: 0,
     ...overrides,
   };
 }
@@ -41,6 +41,10 @@ async function seedProjects(): Promise<void> {
       draft: true,
     }),
   );
+  // Dirty posts for by_project_dirty index coverage
+  await dbSavePost(makePost("post-01", "proj-1", { dirty: 1 }));
+  await dbSavePost(makePost("post-02", "proj-1", { dirty: 1 }));
+  await dbSavePost(makePost("post-01", "proj-2", { dirty: 1 }));
 }
 
 beforeAll(seedProjects);
@@ -124,5 +128,27 @@ describe("dbGetPosts", () => {
     const all = await dbGetPosts("proj-1");
     const sliced = await dbGetPosts("proj-1", { limit: 5, offset: 10 });
     expect(sliced).toEqual(all.slice(10, 15));
+  });
+});
+
+describe("dbGetDirtyPosts", () => {
+  it("returns only dirty posts for the given project", async () => {
+    const dirty = await dbGetDirtyPosts("proj-1");
+    expect(dirty).toHaveLength(2);
+    expect(dirty.map((p) => p.id).sort()).toEqual(["post-01", "post-02"]);
+    expect(dirty.every((p) => p.dirty === 1)).toBe(true);
+  });
+
+  it("returns [] for a project with no dirty posts", async () => {
+    await dbSavePost(makePost("post-99", "proj-empty", { dirty: 0 }));
+    const dirty = await dbGetDirtyPosts("proj-empty");
+    expect(dirty).toEqual([]);
+  });
+
+  it("does not leak dirty posts from other projects", async () => {
+    const dirty2 = await dbGetDirtyPosts("proj-2");
+    expect(dirty2).toHaveLength(1);
+    expect(dirty2[0].id).toBe("post-01");
+    expect(dirty2[0].projectId).toBe("proj-2");
   });
 });

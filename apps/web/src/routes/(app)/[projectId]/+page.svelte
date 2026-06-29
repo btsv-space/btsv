@@ -66,7 +66,7 @@
       draft: true,
       body: "",
       extra: {},
-      dirty: false,
+      dirty: 0,
     };
 
     await dbSavePost(newPost);
