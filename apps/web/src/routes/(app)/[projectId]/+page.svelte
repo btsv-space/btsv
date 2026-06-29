@@ -1,24 +1,33 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
+  import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { getProject } from "$lib/stores/projects.svelte";
   import { posts } from "$lib/stores/posts.svelte";
   import { loadPosts } from "$lib/stores/syncer.svelte";
-  import { syncStatus } from "$lib/stores/syncer.svelte";
+  import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { dbGetPost, dbSavePost } from "$lib/db";
   import { SyncState, type IPostRecord } from "$lib/shared/types";
+  import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
   import { today } from "$lib/shared/utils";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
-  import { FilePlus } from "@lucide/svelte";
+  import { FilePlus, ChevronLeft, ChevronRight } from "@lucide/svelte";
 
   const projectId = page.params.projectId!;
 
   console.log(`[/:projectId] mounted: ${projectId}`);
 
+  const currentPage = $derived(
+    Math.max(1, Number(page.url.searchParams.get("page") ?? "1")),
+  );
+
   onMount(async () => {
     console.log(`[/:projectId] onMount: loading posts`);
-    await loadPosts(projectId, true);
+    await loadPosts(projectId, { forcePull: true, page: currentPage });
+  });
+
+  afterNavigate(() => {
+    void loadPosts(projectId, { forcePull: false, page: currentPage });
   });
 
   let retrying = $state(false);
@@ -60,7 +69,6 @@
     };
 
     await dbSavePost(newPost);
-    posts.value = [newPost, ...posts.value];
 
     return { id };
   }
@@ -76,7 +84,10 @@
     projectEntry.status = "cloning";
     projectEntry.error = "";
     try {
-      await loadPosts(projectEntry.id, true);
+      await loadPosts(projectEntry.id, {
+        forcePull: true,
+        page: currentPage,
+      });
       projectEntry.status = "ready";
     } catch (err) {
       projectEntry.status = "error";
@@ -89,11 +100,17 @@
 
   async function handleCreate() {
     const { id } = await createPost(projectId);
-    goto(`/${projectId}/${id}`);
+    replaceState(`/${projectId}?page=1`, {});
+    await goto(`/${projectId}/${id}`);
   }
 
   function openPost(id: string) {
     goto(`/${projectId}/${id}`);
+  }
+
+  function changePage(newPage: number) {
+    if (newPage < 1) return;
+    goto(`/${projectId}?page=${newPage}`);
   }
 </script>
 
@@ -127,13 +144,23 @@
     </button>
 
     {#if posts.value.length === 0 && syncStatus.get(projectId)?.state !== SyncState.SYNCING_PULL}
-      <p class="text-muted-foreground col-span-full">
-        No posts yet. Create your first post to get started.
-      </p>
+      {#if currentPage > 1}
+        <p class="text-muted-foreground col-span-full">
+          No posts on this page.
+          <button
+            class="text-primary underline ml-1"
+            onclick={() => changePage(1)}>Go to page 1</button
+          >
+        </p>
+      {:else}
+        <p class="text-muted-foreground col-span-full">
+          No posts yet. Create your first post to get started.
+        </p>
+      {/if}
     {:else}
       {#each posts.value as post (post.id)}
         <div
-          class="card cursor-pointer hover:border-muted-foreground/50"
+          class="card cursor-pointer hover:border-muted-foreground/50 relative overflow-hidden"
           role="button"
           tabindex="0"
           onclick={() => openPost(post.id)}
@@ -156,7 +183,7 @@
             >
               {#if !post.draft}
                 {#if post.datePublished}
-              <span>{post.datePublished}</span>
+                  <span>{post.datePublished}</span>
                 {/if}
               {:else}
                 <span
@@ -180,6 +207,30 @@
       {/each}
     {/if}
   </div>
+
+  {#if currentPage > 1 || posts.value.length === POSTS_PAGE_SIZE}
+    <div class="flex items-center justify-center gap-2 mt-6">
+      <button
+        class="btn-outline rounded-full disabled:opacity-30"
+        onclick={() => changePage(currentPage - 1)}
+        disabled={currentPage <= 1}
+        aria-label="Previous page"
+      >
+        <ChevronLeft class="icon" />
+      </button>
+      <span class="text-sm text-muted-foreground px-2">Page {currentPage}</span>
+      <button
+        class="btn-outline rounded-full disabled:opacity-30"
+        onclick={() => changePage(currentPage + 1)}
+        disabled={posts.value.length < POSTS_PAGE_SIZE}
+        aria-label="Next page"
+      >
+        <ChevronRight class="icon" />
+      </button>
+    </div>
+  {/if}
+
+  <div class="h-16"></div>
 
   <FloatingButton class="md:hidden" onclick={handleCreate}>
     <FilePlus class="icon" /> New Post

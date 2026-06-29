@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { syncStatus } from "$lib/stores/syncer.svelte";
+  import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { posts } from "$lib/stores/posts.svelte";
   import { SyncState } from "$lib/shared/types";
   import { onMount } from "svelte";

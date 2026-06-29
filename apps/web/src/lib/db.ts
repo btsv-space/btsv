@@ -52,12 +52,33 @@ function getDB(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
-export async function dbGetPosts(projectId: string): Promise<IPostRecord[]> {
+export async function dbGetPosts(
+  projectId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<IPostRecord[]> {
+  const { limit, offset = 0 } = opts;
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const postRecords = await store.getAll();
-  return postRecords.filter((p) => p.projectId === projectId);
+  const range = IDBKeyRange.bound([projectId, ""], [projectId, "\uffff"]);
+
+  if (limit === undefined) {
+    const all: IPostRecord[] = await store.getAll(range);
+    await tx.done;
+    return all.reverse();
+  }
+
+  let cursor = await store.openCursor(range, "prev");
+  if (!cursor) return [];
+  if (offset > 0) cursor = await cursor.advance(offset);
+  if (!cursor) return [];
+  const posts: IPostRecord[] = [];
+  while (cursor && posts.length < limit) {
+    posts.push(cursor.value);
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return posts;
 }
 
 export async function dbGetPost(

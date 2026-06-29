@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Syncer } from "$lib/sync/syncer";
-import type { IPostRecord, TSyncType, TProjectEntry } from "$lib/shared/types";
+import {
+  SyncState,
+  type IPostRecord,
+  type TSyncType,
+  type TProjectEntry,
+} from "$lib/shared/types";
 import type { ISyncAdapter } from "$lib/shared/types";
 
 const {
@@ -465,18 +470,17 @@ describe("Syncer", () => {
     });
   });
 
-  describe("pull serialization", () => {
-    it("serializes concurrent pull calls for the same project", async () => {
-      let pullResolve: () => void;
-      const pullPromise = new Promise<void>((r) => {
+  describe("pull coalescing", () => {
+    it("coalesces concurrent pull calls for the same project", async () => {
+      let pullResolve: (value: { hasChanges: boolean }) => void;
+      const pullPromise = new Promise<{ hasChanges: boolean }>((r) => {
         pullResolve = r;
       });
       const order: string[] = [];
 
       mockAdapterCheckRemote.mockImplementation(async () => {
         order.push("checkRemote");
-        await pullPromise;
-        return { hasChanges: false };
+        return pullPromise;
       });
 
       const first = syncer.pull(makeMockProjectEntry());
@@ -485,12 +489,24 @@ describe("Syncer", () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(order).toEqual(["checkRemote"]);
 
-      pullResolve!();
-      await vi.advanceTimersByTimeAsync(0);
-      expect(order).toEqual(["checkRemote", "checkRemote"]);
+      pullResolve!({ hasChanges: false });
+      const [firstResult, secondResult] = await Promise.all([first, second]);
 
-      await first;
-      await second;
+      expect(firstResult).toEqual([]);
+      expect(secondResult).toBe(firstResult);
+    });
+
+    it("starts a fresh pull after the coalesced one resolves", async () => {
+      mockAdapterCheckRemote.mockResolvedValue({ hasChanges: false });
+
+      const first = await syncer.pull(makeMockProjectEntry());
+      expect(mockAdapterCheckRemote).toHaveBeenCalledTimes(1);
+
+      const second = await syncer.pull(makeMockProjectEntry());
+      expect(mockAdapterCheckRemote).toHaveBeenCalledTimes(2);
+
+      expect(first).toEqual([]);
+      expect(second).toEqual([]);
     });
   });
 
@@ -623,6 +639,30 @@ describe("Syncer", () => {
     });
   });
 
+  describe("commitDeletion", () => {
+    it("does not delete IDB row when no git token and file exists on disk", async () => {
+      mockEnsureGitToken.mockResolvedValue(null);
+      mockPostFileExists.mockResolvedValue(true);
+
+      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+
+      expect(mockDeletePost).not.toHaveBeenCalled();
+      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
+        state: SyncState.ERROR,
+        errorMsg: "No git token available",
+      });
+    });
+
+    it("deletes IDB row when file does not exist on disk", async () => {
+      mockPostFileExists.mockResolvedValue(false);
+
+      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
+    });
+  });
+
   describe("pull", () => {
     it("skips pull when checkRemote returns false", async () => {
       mockAdapterCheckRemote.mockResolvedValue({ hasChanges: false });
@@ -657,24 +697,6 @@ describe("Syncer", () => {
       );
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe("post-1");
-    });
-
-    it("with tokenOverride always proceeds without checkRemote", async () => {
-      mockAdapterPull.mockResolvedValue([{ id: "post-1", content: "# Hello" }]);
-
-      const result = await syncer.pull(
-        makeMockProjectEntry(),
-        "override-token",
-      );
-
-      expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
-      expect(mockAdapterPull).toHaveBeenCalledWith(
-        "proj-1",
-        "override-token",
-        undefined,
-        undefined,
-      );
-      expect(result).toHaveLength(1);
     });
 
     it("returns empty when no git token available", async () => {

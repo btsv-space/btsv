@@ -7,7 +7,8 @@ import { SvelteMap } from "svelte/reactivity";
 import { posts } from "$lib/stores/posts.svelte";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects } from "$lib/stores/projects.svelte";
-import { syncStatus, syncer } from "$lib/stores/syncer.svelte";
+import { syncer } from "$lib/stores/syncer.svelte";
+import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 const DEK_KEY = `${APP_NAMESPACE}_dek`;
 

@@ -19,3 +19,5 @@ export const IV_LENGTH = 12;
 
 export const DEFAULT_GIT_BRANCH = "staging";
 export const MAIN_GIT_BRANCH = "main";
+
+export const POSTS_PAGE_SIZE = 15;

@@ -2,12 +2,11 @@ import { Syncer } from "$lib/sync/syncer";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects, getProject } from "$lib/stores/projects.svelte";
 import { posts } from "$lib/stores/posts.svelte";
-import { dbGetPosts, dbSaveProject } from "$lib/db";
-import { SvelteMap } from "svelte/reactivity";
-import { type ISyncStatus } from "$lib/shared/types";
+import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
+import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
+import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
 import { setProjectCommitTime } from "$lib/stores/recentProject.svelte";
-
-export const syncStatus = new SvelteMap<string, ISyncStatus>();
+import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 export const syncer = new Syncer({
   getPrefs: () => prefs.value,
@@ -29,14 +28,24 @@ syncer.addAfterSyncHook((projectId, _postId, syncedPost, lastCommitTime) => {
   }
 });
 
+const defaultLoadPostsOpts = {
+  forcePull: false,
+  page: 1,
+  pageSize: POSTS_PAGE_SIZE,
+} satisfies ILoadPostsOpts;
+
+let loadPostsController: AbortController | null = null;
+
 export async function loadPosts(
   projectId: string,
-  forcePull = false,
+  opts: ILoadPostsOpts = {},
 ): Promise<void> {
-  const dbPosts = await dbGetPosts(projectId);
-  if (dbPosts.length > 0) {
-    posts.value = dbPosts.sort((a, b) => b.id.localeCompare(a.id));
-  }
+  loadPostsController?.abort();
+  const controller = new AbortController();
+  loadPostsController = controller;
+
+  const { forcePull, page, pageSize } = { ...defaultLoadPostsOpts, ...opts };
+  const offset = (page - 1) * pageSize;
 
   const project = getProject(projectId);
   if (!project) {
@@ -48,23 +57,48 @@ export async function loadPosts(
     project.syncType !== undefined && project.syncType !== prefs.value.syncType;
   const shouldPull = forcePull || syncTypeChanged;
 
+  const getPostsPage = async () => {
+    const records = await dbGetPosts(projectId, { limit: pageSize, offset });
+    // this avoid stale concurrent calls from mutating the posts store
+    if (controller.signal.aborted) return;
+    posts.value = records;
+  };
+
+  // Pre-pull posts population to prevent UI blink
+  await getPostsPage();
   console.log(
-    `[loadPosts] ${projectId}: cached=${dbPosts.length} syncTypeChanged=${syncTypeChanged} shouldPull=${shouldPull}`,
+    `[loadPosts] ${projectId}: page=${page} cached=${posts.value.length} shouldPull=${shouldPull}`,
   );
 
   if (shouldPull) {
     await syncer.pull(project);
-    const dbPostsAfterPull = await dbGetPosts(projectId);
-    if (dbPostsAfterPull.length > 0) {
-      posts.value = dbPostsAfterPull.sort((a, b) => b.id.localeCompare(a.id));
-    }
-    console.log(`[loadPosts] ${projectId}: using pulled posts`);
+    // Post-pull posts population to return fresh posts
+    await getPostsPage();
+    console.log(`[loadPosts] ${projectId}: page=${page} using pulled posts`);
   } else {
-    console.log(`[loadPosts] ${projectId}: using cached, no pull`);
+    console.log(`[loadPosts] ${projectId}: page=${page} using cached, no pull`);
   }
 
   if (syncTypeChanged) {
     project.syncType = prefs.value.syncType;
     await dbSaveProject(project);
   }
+}
+
+export async function loadPost(
+  projectId: string,
+  postId: string,
+  opts: { forcePull?: boolean } = {},
+): Promise<IPostRecord | null> {
+  if (opts.forcePull) {
+    const project = getProject(projectId);
+    if (project) {
+      try {
+        await syncer.pull(project);
+      } catch (err) {
+        console.warn(`[loadPost] pull failed for ${projectId}/${postId}:`, err);
+      }
+    }
+  }
+  return (await dbGetPost(projectId, postId)) ?? null;
 }

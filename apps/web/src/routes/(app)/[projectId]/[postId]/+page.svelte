@@ -3,8 +3,7 @@
   import { page } from "$app/state";
   import { untrack, onMount, onDestroy } from "svelte";
   import { posts } from "$lib/stores/posts.svelte";
-  import { loadPosts } from "$lib/stores/syncer.svelte";
-  import { syncer } from "$lib/stores/syncer.svelte";
+  import { syncer, loadPost } from "$lib/stores/syncer.svelte";
   import { getProject } from "$lib/stores/projects.svelte";
   import { readPostContent } from "$lib/fs";
   import { parseMdx } from "$lib/parser";
@@ -114,14 +113,12 @@
   }
 
   onMount(async () => {
-    await loadPosts(projectId, true);
-
-    const found = posts.value.find((p) => p.id === postId) || null;
-    if (!found) {
+    const freshPost = await loadPost(projectId, postId, { forcePull: true });
+    if (!freshPost) {
       goto(`/${projectId}`);
       return;
     }
-    workingPost = found;
+    workingPost = freshPost;
 
     tagsInput = workingPost.tags.join(", ");
 

@@ -17,6 +17,20 @@ export enum SyncState {
   CONFLICT = "conflict",
 }
 
+export enum SyncerOps {
+  PULL = "pull",
+  PUSH = "push",
+  DELETE = "delete",
+  INITIAL_PULL = "initialPull",
+}
+
+export interface ISyncerProjectQueueValue {
+  tail: Promise<unknown>;
+  lastPromise: Promise<unknown>;
+  lastOp: SyncerOps;
+  lastOpResolved: boolean;
+}
+
 // ── Interfaces ─────────────────────────────────────
 
 export interface IUser {
@@ -51,13 +65,6 @@ export interface IRemoteCheckResult {
   lastCommitTime?: number;
   headSha?: string;
 }
-
-export type TSyncHook = (
-  projectId?: string,
-  postId?: string,
-  syncedPost?: IPostRecord,
-  lastCommitTime?: number,
-) => void;
 
 export interface ISyncAdapter {
   checkRemote(
@@ -169,13 +176,26 @@ export interface ISyncerConfig {
   onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
 }
 
-export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
+export interface ILoadPostsOpts {
+  forcePull?: boolean;
+  page?: number;
+  pageSize?: number;
+}
 
 // ── Type aliases ───────────────────────────────────
+
+export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 
 export type TGitStatus = string;
 
 export type TSyncType = "git" | "api";
+
+export type TSyncHook = (
+  projectId?: string,
+  postId?: string,
+  syncedPost?: IPostRecord,
+  lastCommitTime?: number,
+) => void;
 
 type TMetadataKey =
   | "projectId"
