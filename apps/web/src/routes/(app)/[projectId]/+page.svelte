@@ -154,12 +154,16 @@
             <p
               class="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap"
             >
+              {#if !post.draft}
+                {#if post.datePublished}
               <span>{post.datePublished}</span>
-              {#if post.draft}
+                {/if}
+              {:else}
                 <span
-                  class="text-xs font-semibold uppercase px-1.5 py-0.5 rounded-full bg-amber-500/12 text-amber-600"
+                  title="Draft"
+                  class="text-xs font-serif italic aspect-square px-1.5 py-1 bg-muted-foreground/10 absolute top-0 right-0 bevel z-5 rounded-bl"
                 >
-                  Draft
+                  d
                 </span>
               {/if}
               {#if post.tags.length > 0}

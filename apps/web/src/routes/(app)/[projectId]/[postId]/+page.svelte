@@ -307,6 +307,7 @@
           type="text"
           bind:value={workingPost.title}
           onblur={handleTitleBlur}
+          placeholder="Title"
           class="text-muted-foreground md:hidden bg-transparent border-none p-0 m-0 font-inherit text-base"
         />
         <label
