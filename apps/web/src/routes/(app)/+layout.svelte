@@ -70,8 +70,7 @@
             );
             return {
               ...apiProject,
-              status: existing.status,
-              error: existing.error,
+              ...existing,
             } as TProjectEntry;
           }
           return await projectEntryWithStatus(apiProject);
