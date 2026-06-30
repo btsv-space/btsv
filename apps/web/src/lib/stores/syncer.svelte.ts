@@ -69,6 +69,9 @@ export async function loadPosts(
   const syncTypeChanged =
     project.syncType !== undefined && project.syncType !== prefs.value.syncType;
   const shouldPull = forcePull || syncTypeChanged;
+console.log(
+    `[loadPosts] ${projectId}: page=${page} cached=${posts.value.length} shouldPull=${shouldPull}`,
+  );
 
   if (shouldPull) {
     await syncer.pull(project);
