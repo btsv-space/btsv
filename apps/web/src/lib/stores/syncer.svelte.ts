@@ -53,10 +53,6 @@ export async function loadPosts(
     return;
   }
 
-  const syncTypeChanged =
-    project.syncType !== undefined && project.syncType !== prefs.value.syncType;
-  const shouldPull = forcePull || syncTypeChanged;
-
   const getPostsPage = async () => {
     const records = await dbGetPosts(projectId, { limit: pageSize, offset });
     // this avoids stale concurrent calls from mutating the posts store
@@ -69,6 +65,10 @@ export async function loadPosts(
   console.log(
     `[loadPosts] ${projectId}: page=${page} cached=${posts.value.length} shouldPull=${shouldPull}`,
   );
+
+  const syncTypeChanged =
+    project.syncType !== undefined && project.syncType !== prefs.value.syncType;
+  const shouldPull = forcePull || syncTypeChanged;
 
   if (shouldPull) {
     await syncer.pull(project);
