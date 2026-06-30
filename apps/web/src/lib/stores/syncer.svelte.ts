@@ -62,9 +62,6 @@ export async function loadPosts(
 
   // Pre-pull posts population to prevent UI blink
   await getPostsPage();
-  console.log(
-    `[loadPosts] ${projectId}: page=${page} cached=${posts.value.length} shouldPull=${shouldPull}`,
-  );
 
   const syncTypeChanged =
     project.syncType !== undefined && project.syncType !== prefs.value.syncType;
