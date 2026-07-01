@@ -206,6 +206,8 @@ type TMetadataKey =
 
 export type TContentKey = Exclude<keyof IPostRecord, TMetadataKey>;
 
+export type IPostContent = Omit<IPostRecord, TMetadataKey>;
+
 export type TProjectEntry = IProject & {
   status: "unknown" | "ready" | "cloning" | "error";
   error: string;
