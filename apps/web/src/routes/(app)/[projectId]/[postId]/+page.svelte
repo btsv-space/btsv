@@ -46,7 +46,9 @@
 
   // initialize so there's no blink
   let workingPost = $state(posts.value.find((p) => p.id === postId) || null);
-  let tagsInput = $state("");
+  let tagsInput = $state(
+    tagsArrToString(posts.value.find((p) => p.id === postId)?.tags),
+  );
   let saveError = $state<{ title: string; message: string } | null>(null);
   let showDeleteConfirm = $state(false);
   let isWriteMode = $state(true);
@@ -89,6 +91,11 @@
     saveError = null;
   }
 
+  function tagsArrToString(tagsArr: string[] | undefined): string {
+    if (!tagsArr) return "";
+    return tagsArr.join(", ");
+  }
+
   function handleTitleBlur() {
     // Derive slug from title when slug is empty
     if (!workingPost!.slug && workingPost!.title) {
@@ -120,7 +127,7 @@
     }
     workingPost = freshPost;
 
-    tagsInput = workingPost.tags.join(", ");
+    tagsInput = tagsArrToString(workingPost.tags);
 
     let gitBaseline: IPostRecord | null = null;
     try {
@@ -176,7 +183,7 @@
 
     function beforeUnload(e: BeforeUnloadEvent) {
       // Warns the user with the browser's native "unsaved changes" dialog
-      if (saver?.isUnsaved() ?? false) {
+      if (saver?.isScheduled() ?? false) {
         e.preventDefault();
         e.returnValue = true;
       }
