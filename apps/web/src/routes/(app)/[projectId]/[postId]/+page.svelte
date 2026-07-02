@@ -9,6 +9,7 @@
   import { parseMdx } from "$lib/parser";
   import { DebouncedSaver } from "$lib/saver";
   import type { IPostRecord } from "$lib/shared/types";
+  import { today } from "$lib/shared/utils";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
@@ -102,6 +103,13 @@
       untrack(() => {
         workingPost!.slug = deriveSlug(workingPost!.title);
       });
+    }
+  }
+
+  function handlePublishToggle(v: boolean) {
+    workingPost!.draft = !v;
+    if (v && !workingPost!.datePublished) {
+      workingPost!.datePublished = today();
     }
   }
 
@@ -392,7 +400,7 @@
         <label class="flex flex-row items-center gap-2 cursor-pointer">
           <Switch
             checked={!workingPost.draft}
-            onCheckedChange={(v) => (workingPost!.draft = !v)}
+            onCheckedChange={handlePublishToggle}
             class="my-1"
           />
           <span

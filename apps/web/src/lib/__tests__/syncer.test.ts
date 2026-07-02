@@ -15,7 +15,6 @@ const {
   mockDeletePost,
   mockGetPost,
   mockSerializeMdx,
-  mockComputeSaveDates,
   mockParseMdx,
   mockDecryptToken,
   mockBytesFromApi,
@@ -38,7 +37,6 @@ const {
   mockDeletePost: vi.fn(),
   mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
-  mockComputeSaveDates: vi.fn(),
   mockParseMdx: vi.fn(),
   mockDecryptToken: vi.fn(),
   mockBytesFromApi: vi.fn(),
@@ -71,7 +69,6 @@ vi.mock("$lib/fs", () => ({
 
 vi.mock("$lib/parser", () => ({
   serializeMdx: mockSerializeMdx,
-  computeSaveDates: mockComputeSaveDates,
   parseMdx: mockParseMdx,
 }));
 
@@ -174,7 +171,6 @@ describe("Syncer", () => {
     mockDeletePost.mockReset();
     mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
-    mockComputeSaveDates.mockReset();
     mockDecryptToken.mockReset();
     mockBytesFromApi.mockReset();
     mockGetSecret.mockReset();
@@ -194,10 +190,6 @@ describe("Syncer", () => {
     mockSerializeMdx.mockImplementation(
       (post: IPostRecord) => `serialized-${post.id}`,
     );
-    mockComputeSaveDates.mockReturnValue({
-      dateUpdated: "2026-06-08",
-      datePublished: "2026-06-08",
-    });
     mockAdapterCommitAndPush.mockResolvedValue("sha-abc123");
     mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
     mockAdapterPull.mockResolvedValue([]);
