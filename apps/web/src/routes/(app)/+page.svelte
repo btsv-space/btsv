@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { getProject } from "$lib/stores/projects.svelte";
-  import { getRecentProjectId } from "$lib/stores/recentProject.svelte";
+  import { getRecentProjectId } from "$lib/stores/recentProject";
 
   onMount(() => {
     const id = getRecentProjectId();

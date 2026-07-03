@@ -5,7 +5,7 @@ import { posts } from "$lib/stores/posts.svelte";
 import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
 import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
 import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
-import { setProjectCommitTime } from "$lib/stores/recentProject.svelte";
+import { setProjectCommitTime } from "$lib/stores/recentProject";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 export const syncer = new Syncer({

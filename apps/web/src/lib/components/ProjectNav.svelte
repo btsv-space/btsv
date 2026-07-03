@@ -3,7 +3,7 @@
   import { page } from "$app/state";
   import { projects, getProject } from "$lib/stores/projects.svelte";
   import { isAuthenticated } from "$lib/stores/auth.svelte";
-  import { getProjectCommits } from "$lib/stores/recentProject.svelte";
+  import { getProjectCommits } from "$lib/stores/recentProject";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import Marker from "$lib/components/Marker.svelte";
   import { ChevronDown } from "@lucide/svelte";
