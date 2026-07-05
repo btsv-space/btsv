@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { syncStates, syncErrors } from "$lib/stores/syncer.svelte";
-  import { posts } from "$lib/stores/posts.svelte";
+  import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { SyncState } from "$lib/shared/types";
   import { onMount } from "svelte";
   import { Save } from "@lucide/svelte";
@@ -27,20 +26,22 @@
     };
   });
 
-  const hasDirty = $derived(
-    posts.value.some((p) => p.projectId === projectId && p.dirty),
-  );
+  const status = $derived(syncStatus.get(projectId));
 
   const effectiveState = $derived(
     !online
       ? "offline"
-      : syncStates.get(projectId) === SyncState.SYNCING
-        ? SyncState.SYNCING
-        : hasDirty
-          ? SyncState.DIRTY
-          : syncStates.get(projectId) === SyncState.ERROR
-            ? SyncState.ERROR
-            : SyncState.SYNCED,
+      : status?.state === SyncState.SYNCING_PUSH
+        ? SyncState.SYNCING_PUSH
+        : status?.state === SyncState.SYNCING_PULL
+          ? SyncState.SYNCING_PULL
+          : status?.state === SyncState.CONFLICT
+            ? SyncState.CONFLICT
+            : status?.dirty
+              ? SyncState.DIRTY
+              : status?.state === SyncState.ERROR
+                ? SyncState.ERROR
+                : SyncState.SYNCED,
   );
 
   let label = $derived(
@@ -50,14 +51,18 @@
         ? "Synced"
         : effectiveState === SyncState.DIRTY
           ? "Unsaved changes"
-          : effectiveState === SyncState.SYNCING
+          : effectiveState === SyncState.SYNCING_PUSH
             ? "Saving..."
-            : "Sync failed",
+            : effectiveState === SyncState.SYNCING_PULL
+              ? "Loading..."
+              : effectiveState === SyncState.CONFLICT
+                ? "Needs resolution"
+                : "Sync failed",
   );
 
   let title = $derived(
     effectiveState === SyncState.ERROR
-      ? `${label}: ${syncErrors.get(projectId) ?? ""}`
+      ? `${label}: ${status?.errorMsg ?? ""}`
       : label,
   );
 </script>
@@ -73,10 +78,13 @@
     class:border={effectiveState === "offline"}
     class:border-border={effectiveState === "offline"}
     class:bg-transparent={effectiveState === "offline"}
-    class:bg-emerald-500={effectiveState === SyncState.SYNCED}
+    class:bg-green-500={effectiveState === SyncState.SYNCED}
     class:bg-amber-500={effectiveState === SyncState.DIRTY}
-    class:bg-lime-500={effectiveState === SyncState.SYNCING}
-    class:animate-pulse-fast={effectiveState === SyncState.SYNCING}
+    class:bg-lime-500={effectiveState === SyncState.SYNCING_PUSH}
+    class:bg-cyan-500={effectiveState === SyncState.SYNCING_PULL}
+    class:animate-pulse-fast={effectiveState === SyncState.SYNCING_PUSH ||
+      effectiveState === SyncState.SYNCING_PULL}
+    class:bg-fuchsia-500={effectiveState === SyncState.CONFLICT}
     class:bg-destructive={effectiveState === SyncState.ERROR}
   ></span>
   {#if onSave && effectiveState === SyncState.DIRTY}

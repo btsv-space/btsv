@@ -1,244 +1,384 @@
-import { dbGetDirtyPosts, dbSavePost, dbDeletePost, dbGetPost } from "$lib/db";
-import { serializeMdx, computeSaveDates, parseMdx } from "$lib/parser";
+import {
+  dbGetDirtyPosts,
+  dbSavePost,
+  dbDeletePost,
+  dbGetPost,
+  dbSaveProject,
+} from "$lib/db";
+import { serializeMdx, parseMdx } from "$lib/parser";
 import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
-import { commitTimestamp } from "$lib/shared/utils";
+import { commitTimestamp, today } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
-import { postFileExists } from "$lib/fs";
+import { postFileExists, deletePostFile } from "$lib/fs";
 import {
+  SyncerOps,
   SyncState,
-  type IProject,
-  type IUserPreferences,
   type IPostEntry,
   type IPostRecord,
+  type ISyncerProjectQueueValue,
   type TProjectEntry,
   type TSyncHook,
+  type ISyncerConfig,
 } from "$lib/shared/types";
 
 function getUsername(): string {
   return currentUser.value?.username ?? "unknown";
 }
 
-export interface SyncerConfig {
-  getPrefs: () => IUserPreferences;
-  getProjects: () => TProjectEntry[];
-  onStateChange?: (projectId: string, state: SyncState) => void;
-  onError?: (projectId: string, error: string) => void;
-}
-
 export class Syncer {
-  private config: SyncerConfig;
+  private config: ISyncerConfig;
   private started = false;
   private syncingAll = false;
-  private perProjectLock = new Set<string>();
+  private projectQueue = new Map<string, ISyncerProjectQueueValue>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private afterSyncHooks = new Set<TSyncHook>();
 
-  constructor(config: SyncerConfig) {
+  constructor(config: ISyncerConfig) {
     this.config = config;
+  }
+
+  #setStatus(
+    projectId: string,
+    state: SyncState,
+    errorMsg = "",
+    dirtyOverride: boolean | null = null,
+  ): void {
+    this.config.onSyncStatus?.(
+      projectId,
+      {
+        state,
+        errorMsg: state === SyncState.ERROR ? errorMsg : "",
+      },
+      dirtyOverride,
+    );
+  }
+
+  async #ensureGitToken(projectId: string): Promise<string | null> {
+    const token = await ensureGitToken(projectId);
+    if (!token) {
+      console.error(`[syncer] no git token for ${projectId}`);
+      this.#setStatus(projectId, SyncState.ERROR, "No git token available");
+    }
+    return token;
+  }
+
+  async #runSerial<T>(
+    projectId: string,
+    fn: () => Promise<T>,
+    opType: SyncerOps,
+  ): Promise<T> {
+    const prev = this.projectQueue.get(projectId)?.tail ?? Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+
+    // when the operation is done, this marks it as no longer in-flight
+    next.finally(() => {
+      const q = this.projectQueue.get(projectId);
+      if (q?.lastPromise === next) {
+        this.projectQueue.set(projectId, { ...q, lastOpResolved: true });
+      }
+    });
+
+    this.projectQueue.set(projectId, {
+      tail: next.catch(() => {}),
+      lastPromise: next,
+      lastOp: opType,
+      lastOpResolved: false,
+    });
+    return next;
   }
 
   // ── Operations ──
 
-  async pull(
-    project: IProject,
-    tokenOverride?: string,
-  ): Promise<IPostRecord[]> {
-    const prefs = this.config.getPrefs();
-    console.log(
-      `[syncer] pull: ${project.id} tokenOverride=${!!tokenOverride}`,
+  async pull(project: TProjectEntry): Promise<IPostRecord[]> {
+    const q = this.projectQueue.get(project.id);
+    // if the previous queue op is an active pull, just return that
+    if (q?.lastOp === SyncerOps.PULL && !q.lastOpResolved && q.lastPromise) {
+      return q.lastPromise as Promise<IPostRecord[]>;
+    }
+
+    return this.#runSerial(
+      project.id,
+      async () => {
+        const userPrefs = this.config.getPrefs();
+        const token = await this.#ensureGitToken(project.id);
+        if (!token) {
+          return [];
+        }
+
+        const adapter = await createSyncAdapter(project, userPrefs);
+        let lastCommitTime: number | undefined;
+        let headSha: string | undefined;
+
+        try {
+          const checkResult = await adapter.checkRemote(
+            project.id,
+            token,
+            project.storedRemoteSha,
+          );
+          lastCommitTime = checkResult.lastCommitTime;
+          headSha = checkResult.headSha;
+          if (!checkResult.hasChanges) {
+            console.log(
+              `[syncer] no remote changes for ${project.id}, skipping pull`,
+            );
+            this.#runAfterSyncHooks(
+              project.id,
+              undefined,
+              undefined,
+              lastCommitTime,
+            );
+            this.#setStatus(project.id, SyncState.SYNCED);
+            return [];
+          }
+
+          this.#setStatus(project.id, SyncState.SYNCING_PULL);
+          const postEntries = await adapter.pull(
+            project.id,
+            token,
+            project.storedRemoteSha,
+            headSha,
+          );
+          console.log(
+            `[syncer] adapter.pull returned ${postEntries.length} postEntries`,
+          );
+
+          const postRecords = await this.#parseAndSave(project.id, postEntries);
+
+          if (headSha) {
+            project.storedRemoteSha = headSha;
+            await dbSaveProject(project);
+          }
+
+          this.#runAfterSyncHooks(
+            project.id,
+            undefined,
+            undefined,
+            lastCommitTime,
+          );
+          this.#setStatus(project.id, SyncState.SYNCED);
+          return postRecords;
+        } catch (err) {
+          this.#setStatus(
+            project.id,
+            SyncState.ERROR,
+            err instanceof Error ? err.message : "Pull failed",
+          );
+          return [];
+        }
+      },
+      SyncerOps.PULL,
     );
-    const token = tokenOverride ?? (await ensureGitToken(project.id));
-    if (!token) {
-      console.error(`[syncer] no git token for ${project.id}`);
-      return [];
-    }
-
-    const adapter = await createSyncAdapter(project, prefs);
-
-    let lastCommitTime: number | undefined;
-
-    if (!tokenOverride) {
-      const result = await adapter.checkRemote(project.id, token);
-      lastCommitTime = result.lastCommitTime;
-      if (!result.hasChanges) {
-        console.log(
-          `[syncer] no remote changes for ${project.id}, skipping pull`,
-        );
-        this.#runAfterSyncHooks(
-          project.id,
-          undefined,
-          undefined,
-          lastCommitTime,
-        );
-        return [];
-      }
-    }
-
-    const entries = await adapter.pull(project.id, token);
-    console.log(`[syncer] adapter.pull returned ${entries.length} entries`);
-
-    const records = await this.#parseAndSave(project.id, entries);
-    this.#runAfterSyncHooks(project.id, undefined, undefined, lastCommitTime);
-    return records;
   }
 
   async initialPull(
-    project: IProject,
+    project: TProjectEntry,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
-    const prefs = this.config.getPrefs();
-    console.log(`[syncer] initialPull: ${project.id}`);
-    const token = tokenOverride ?? (await ensureGitToken(project.id));
-    if (!token) {
-      console.error(`[syncer] no git token for ${project.id}`);
-      return [];
-    }
-    const adapter = await createSyncAdapter(project, prefs);
-    const { entries, lastCommitTime } = await adapter.initialPull(
+    return this.#runSerial(
       project.id,
-      token,
-    );
-    console.log(`[syncer] initialPull returned ${entries.length} entries`);
-    const records = await this.#parseAndSave(project.id, entries);
-    this.#runAfterSyncHooks(project.id, undefined, undefined, lastCommitTime);
-    return records;
-  }
-
-  async syncDirtyPosts(projectId: string): Promise<boolean> {
-    if (this.perProjectLock.has(projectId)) return false;
-    this.perProjectLock.add(projectId);
-
-    try {
-      const projects = this.config.getProjects();
-      const project = projects.find((p) => p.id === projectId);
-      if (!project) {
-        console.error(`[syncer] project ${projectId} not found for sync`);
-        return false;
-      }
-
-      const prefs = this.config.getPrefs();
-      const dirty = await dbGetDirtyPosts(projectId);
-
-      if (dirty.length === 0) {
-        this.config.onStateChange?.(projectId, SyncState.SYNCED);
-        return true;
-      }
-
-      this.config.onStateChange?.(projectId, SyncState.SYNCING);
-
-      const username = getUsername();
-      const adapter = await createSyncAdapter(project, prefs);
-      let allOk = true;
-      let anyPublished = false;
-      let lastToken: string | null = null;
-
-      for (const post of dirty) {
+      async () => {
+        const userPrefs = this.config.getPrefs();
+        const token = tokenOverride ?? (await this.#ensureGitToken(project.id));
+        if (!token) {
+          return [];
+        }
+        const adapter = await createSyncAdapter(project, userPrefs);
+        this.#setStatus(project.id, SyncState.SYNCING_PULL);
         try {
-          const token = await ensureGitToken(projectId);
-          if (!token) {
-            console.warn(`[syncer] no git token for ${projectId}, skipping`);
-            this.config.onStateChange?.(projectId, SyncState.ERROR);
-            this.config.onError?.(projectId, "No git token available");
-            allOk = false;
-            continue;
+          const { postEntries, lastCommitTime, headSha } =
+            await adapter.initialPull(project.id, token);
+          console.log(
+            `[syncer] initialPull returned ${postEntries.length} postEntries`,
+          );
+
+          const postRecords = await this.#parseAndSave(project.id, postEntries);
+
+          if (headSha) {
+            project.storedRemoteSha = headSha;
+            await dbSaveProject(project);
           }
-          lastToken = token;
 
-          const dates = computeSaveDates(post);
-          post.dateUpdated = dates.dateUpdated;
-          post.datePublished = dates.datePublished;
-
-          const mdxContent = serializeMdx(post);
-
-          const ts = commitTimestamp();
-          const message = `${APP_NAMESPACE}-${username}-${projectId}-${post.id}-save-${ts}`;
-
-          await adapter.commitAndPush(
-            projectId,
-            post.id,
-            mdxContent,
-            message,
-            token,
+          this.#runAfterSyncHooks(
+            project.id,
+            undefined,
+            undefined,
+            lastCommitTime,
           );
-
-          post.dirty = false;
-
-          if (!post.draft) anyPublished = true;
-
-          await dbSavePost(post);
-
-          this.#runAfterSyncHooks(projectId, post.id, post, Date.now());
+          this.#setStatus(project.id, SyncState.SYNCED);
+          return postRecords;
         } catch (err) {
-          console.error(`[syncer] sync failed for ${post.id}:`, err);
-          this.config.onStateChange?.(projectId, SyncState.ERROR);
-          this.config.onError?.(
-            projectId,
-            err instanceof Error ? err.message : "Sync failed",
+          this.#setStatus(
+            project.id,
+            SyncState.ERROR,
+            err instanceof Error ? err.message : "Initial pull failed",
           );
-          allOk = false;
+          return [];
         }
-      }
-
-      if (allOk) {
-        this.config.onStateChange?.(projectId, SyncState.SYNCED);
-        this.config.onError?.(projectId, "");
-      }
-
-      if (anyPublished && allOk && lastToken) {
-        try {
-          await adapter.mergeToMain(projectId, lastToken);
-        } catch (err) {
-          console.error(`[syncer] mergeToMain failed for ${projectId}:`, err);
-        }
-      }
-
-      return allOk;
-    } finally {
-      this.perProjectLock.delete(projectId);
-    }
+      },
+      SyncerOps.INITIAL_PULL,
+    );
   }
 
-  async commitDeletion(project: IProject, postId: string): Promise<void> {
-    const post = await dbGetPost(project.id, postId);
-    const wasPublished = post && !post.draft;
+  async push(project: TProjectEntry): Promise<boolean> {
+    return this.#runSerial(
+      project.id,
+      async () => {
+        const dirty = await dbGetDirtyPosts(project.id);
+        if (dirty.length === 0) {
+          // we just got dirty from db, can override dirty status
+          this.#setStatus(project.id, SyncState.SYNCED, "", false);
+          return true;
+        }
 
-    const existsOnDisk = await postFileExists(project.id, postId);
-    if (!existsOnDisk) {
-      await dbDeletePost(project.id, postId);
-      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
-      return;
-    }
+        this.#setStatus(project.id, SyncState.SYNCING_PUSH);
+        const userPrefs = this.config.getPrefs();
+        const username = getUsername();
+        const adapter = await createSyncAdapter(project, userPrefs);
+        let allOk = true;
+        let anyPublished = false;
+        let lastToken: string | null = null;
+        let pushedSha: string | null = null;
 
-    const prefs = this.config.getPrefs();
-    const token = await ensureGitToken(project.id);
-    if (!token) {
-      console.error(`[syncer] no git token for deletion of ${postId}`);
-      await dbDeletePost(project.id, postId);
-      this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
-      return;
-    }
+        for (const post of dirty) {
+          try {
+            const token = await this.#ensureGitToken(project.id);
+            if (!token) {
+              allOk = false;
+              continue;
+            }
+            lastToken = token;
 
-    const username = getUsername();
-    const ts = commitTimestamp();
-    const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
+            const dateUpdated = today();
+            post.dateUpdated = dateUpdated;
 
-    const adapter = await createSyncAdapter(project, prefs);
-    await adapter.commitDeletion(project.id, postId, message, token);
-    await dbDeletePost(project.id, postId);
+            const mdxContent = serializeMdx(post);
 
-    this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+            const ts = commitTimestamp();
+            const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-save-${ts}`;
 
-    if (wasPublished) {
-      try {
-        await adapter.mergeToMain(project.id, token);
-      } catch (err) {
-        console.error(
-          `[syncer] merge after deletion failed for ${project.id}:`,
-          err,
+            const commitSha = await adapter.commitAndPush(
+              project.id,
+              post.id,
+              mdxContent,
+              message,
+              token,
+            );
+
+            if (commitSha) pushedSha = commitSha;
+
+            if (!post.draft) anyPublished = true;
+
+            const syncedPost: IPostRecord = { ...post, dirty: 0 };
+
+            // when editor is open for this post, skip save to db
+            const isEditing =
+              this.config.isPostEditing?.(project.id, post.id) ?? false;
+            if (!isEditing) {
+              await dbSavePost(syncedPost);
+            }
+
+            // TODO: check if there are any dirty/remaining hooks
+            // that will mess up with dirty state
+            this.#runAfterSyncHooks(
+              project.id,
+              post.id,
+              syncedPost,
+              Date.now(),
+            );
+          } catch (err) {
+            console.error(`[syncer] sync failed for ${post.id}:`, err);
+            this.#setStatus(
+              project.id,
+              SyncState.ERROR,
+              err instanceof Error ? err.message : "Sync failed",
+            );
+            allOk = false;
+          }
+        }
+
+        if (anyPublished && allOk && lastToken) {
+          try {
+            await adapter.mergeToMain(project.id, lastToken);
+          } catch (err) {
+            console.error(
+              `[syncer] mergeToMain failed for ${project.id}:`,
+              err,
+            );
+          }
+        }
+
+        if (allOk && pushedSha) {
+          project.storedRemoteSha = pushedSha;
+          await dbSaveProject(project);
+        }
+
+        if (allOk) {
+          this.#setStatus(project.id, SyncState.SYNCED);
+        }
+
+        return allOk;
+      },
+      SyncerOps.PUSH,
+    );
+  }
+
+  async commitDeletion(project: TProjectEntry, postId: string): Promise<void> {
+    await this.#runSerial(
+      project.id,
+      async () => {
+        const post = await dbGetPost(project.id, postId);
+        const wasPublished = post && !post.draft;
+
+        const existsOnDisk = await postFileExists(project.id, postId);
+        if (!existsOnDisk) {
+          await dbDeletePost(project.id, postId);
+          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+          return;
+        }
+
+        const userPrefs = this.config.getPrefs();
+        const token = await this.#ensureGitToken(project.id);
+        if (!token) {
+          return;
+        }
+
+        const username = getUsername();
+        const ts = commitTimestamp();
+        const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
+
+        const adapter = await createSyncAdapter(project, userPrefs);
+        const commitSha = await adapter.commitDeletion(
+          project.id,
+          postId,
+          message,
+          token,
         );
-      }
-    }
+        await dbDeletePost(project.id, postId);
+
+        if (commitSha) {
+          project.storedRemoteSha = commitSha;
+          await dbSaveProject(project);
+        }
+
+        this.#setStatus(project.id, SyncState.SYNCED);
+
+        this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+
+        if (wasPublished) {
+          try {
+            await adapter.mergeToMain(project.id, token);
+          } catch (err) {
+            console.error(
+              `[syncer] merge after deletion failed for ${project.id}:`,
+              err,
+            );
+          }
+        }
+      },
+      SyncerOps.DELETE,
+    );
   }
 
   // ── Hooks ──
@@ -277,35 +417,53 @@ export class Syncer {
 
   async #parseAndSave(
     projectId: string,
-    entries: IPostEntry[],
+    postEntries: IPostEntry[],
   ): Promise<IPostRecord[]> {
-    const records: IPostRecord[] = [];
-    for (const { id, content } of entries) {
+    const postRecords: IPostRecord[] = [];
+    for (const postEntry of postEntries) {
+      const { id, content, deleted } = postEntry;
+      let syncedPost: IPostRecord | undefined;
       try {
-        const { post } = parseMdx(content, id);
-        const record: IPostRecord = {
+        if (deleted) {
+          await dbDeletePost(projectId, id);
+          try {
+            await deletePostFile(projectId, id);
+          } catch (err) {
+            console.debug(
+              `[syncer] deletePostFile error during pulled-delete for ${id}:`,
+              err,
+            );
+          }
+          continue;
+        }
+        if (!content) continue;
+
+        // TODO: will be changed as part of conflict mgmt in sync refactor
+        // Guard: never overwrite a locally-dirty post with stale remote data.
+        const localPost = await dbGetPost(projectId, id);
+        if (localPost?.dirty) {
+          postRecords.push(localPost);
+          continue;
+        }
+
+        const parsed = parseMdx(content, id);
+        const post: IPostRecord = {
           projectId,
-          id: post.id,
-          slug: post.slug,
-          title: post.title,
-          dateCreated: post.dateCreated,
-          dateUpdated: post.dateUpdated,
-          datePublished: post.datePublished,
-          description: post.description,
-          tags: post.tags,
-          draft: post.draft,
-          body: post.body,
-          extra: { ...post.extra },
-          dirty: false,
+          ...parsed,
+          dirty: 0,
+          extra: { ...parsed.extra },
         };
-        await dbSavePost(record);
-        records.push(record);
-        this.#runAfterSyncHooks(projectId, record.id, record);
+
+        await dbSavePost(post);
+        postRecords.push(post);
+        syncedPost = post;
       } catch (err) {
         console.error(`[syncer] failed to parse pulled post ${id}:`, err);
+      } finally {
+        this.#runAfterSyncHooks(projectId, syncedPost?.id ?? id, syncedPost);
       }
     }
-    return records;
+    return postRecords;
   }
 
   async #syncAllDirty() {
@@ -313,11 +471,11 @@ export class Syncer {
     this.syncingAll = true;
 
     try {
-      const entries = this.config.getProjects();
+      const projectEntries = this.config.getProjects();
 
-      for (const entry of entries) {
-        if (entry.status !== "ready") continue;
-        await this.syncDirtyPosts(entry.id);
+      for (const projectEntry of projectEntries) {
+        if (projectEntry.status !== "ready") continue;
+        await this.push(projectEntry);
       }
     } finally {
       this.syncingAll = false;
@@ -331,7 +489,7 @@ export class Syncer {
       this.#syncAllDirty()
         .catch(() => {})
         .finally(() => this.#schedule());
-    }, 60_000);
+    }, 10_000);
   }
 
   #clearTimer() {

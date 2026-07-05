@@ -8,7 +8,7 @@ import (
 
 func (db *DB) CreateUserPreferences(userID string) error {
 	_, err := db.conn.Exec(
-		"INSERT INTO user_preferences (user_id, sync_type) VALUES (?, 'git')",
+		"INSERT INTO user_preferences (user_id, sync_type) VALUES (?, 'api')",
 		userID,
 	)
 	return err

@@ -36,6 +36,7 @@ export class GitAdapter implements ISyncAdapter {
   async checkRemote(
     projectId: string,
     gitToken: string,
+    storedRemoteSha?: string,
   ): Promise<IRemoteCheckResult> {
     const fs = await getFS();
     const dir = getDir(projectId);
@@ -72,13 +73,6 @@ export class GitAdapter implements ISyncAdapter {
         return { hasChanges: true };
       }
 
-      let localOid: string;
-      try {
-        localOid = await git.resolveRef({ fs, dir, ref: "HEAD" });
-      } catch {
-        return { hasChanges: true };
-      }
-
       let lastCommitTime: number | undefined;
       try {
         const log = await git.log({
@@ -92,7 +86,11 @@ export class GitAdapter implements ISyncAdapter {
         console.debug("[git] checkRemote log best-effort error:", err);
       }
 
-      return { hasChanges: localOid !== remoteOid, lastCommitTime };
+      return {
+        hasChanges: storedRemoteSha !== remoteOid,
+        lastCommitTime,
+        headSha: remoteOid,
+      };
     } catch {
       return { hasChanges: true };
     }
@@ -101,7 +99,11 @@ export class GitAdapter implements ISyncAdapter {
   async initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }> {
+  ): Promise<{
+    postEntries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }> {
     const git = await import("isomorphic-git");
     const { default: http } = await import("isomorphic-git/http/web");
     const fs = await getFS();
@@ -174,7 +176,7 @@ export class GitAdapter implements ISyncAdapter {
       }
     }
 
-    const [logResult, entries] = await Promise.all([
+    const [logResult, postEntries] = await Promise.all([
       git.log({ fs, dir, ref: this.gitBranch, depth: 1 }).catch(() => null),
       this.pull(projectId, gitToken),
     ]);
@@ -184,7 +186,18 @@ export class GitAdapter implements ISyncAdapter {
       lastCommitTime = (logResult[0]?.commit?.author?.timestamp ?? 0) * 1000;
     }
 
-    return { entries, lastCommitTime };
+    let headSha: string | undefined;
+    try {
+      headSha = await git.resolveRef({
+        fs,
+        dir,
+        ref: `refs/remotes/origin/${this.gitBranch}`,
+      });
+    } catch {
+      headSha = logResult?.[0]?.oid;
+    }
+
+    return { postEntries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {
@@ -217,7 +230,12 @@ export class GitAdapter implements ISyncAdapter {
     }
   }
 
-  async pull(projectId: string, gitToken: string): Promise<IPostEntry[]> {
+  async pull(
+    projectId: string,
+    gitToken: string,
+    _storedRemoteSha?: string,
+    _headSha?: string,
+  ): Promise<IPostEntry[]> {
     const git = await import("isomorphic-git");
     const { default: http } = await import("isomorphic-git/http/web");
     const fs = await getFS();
@@ -225,6 +243,15 @@ export class GitAdapter implements ISyncAdapter {
     const dir = getDir(projectId);
 
     const gitRepoExists = await dirExists(fs, `${dir}/.git`);
+
+    let preIds: Set<string> = new Set();
+    if (gitRepoExists) {
+      try {
+        preIds = new Set((await readPostFiles(fs, dir, true)).map((e) => e.id));
+      } catch (err) {
+        console.debug("[git] pre-pull id snapshot failed:", err);
+      }
+    }
 
     if (!gitRepoExists) {
       await ensureDirChain(fs, dir);
@@ -266,7 +293,18 @@ export class GitAdapter implements ISyncAdapter {
 
     await ensureRepoHasCommit(fs, dir, git);
 
-    return readPostFiles(fs, dir);
+    const postEntries = await readPostFiles(fs, dir);
+
+    if (preIds.size > 0) {
+      const postIds = new Set(postEntries.map((e) => e.id));
+      for (const id of preIds) {
+        if (!postIds.has(id)) {
+          postEntries.push({ id, deleted: true });
+        }
+      }
+    }
+
+    return postEntries;
   }
 
   async commitAndPush(
@@ -426,8 +464,9 @@ async function ensureRepoHasCommit(
 async function readPostFiles(
   fs: Awaited<ReturnType<typeof getFS>>,
   dir: string,
+  idOnly = false,
 ): Promise<IPostEntry[]> {
-  const entries: IPostEntry[] = [];
+  const postEntries: IPostEntry[] = [];
 
   async function walk(current: string): Promise<void> {
     let names: string[];
@@ -453,13 +492,20 @@ async function readPostFiles(
         const relative = full.replace(`${dir}/`, "");
         if (relative.includes("/")) {
           const id = relative.split("/").pop()!.replace(POST_EXT, "");
-          const content = (await fs.promises.readFile(full, "utf8")) as string;
-          entries.push({ id, content });
+          if (idOnly) {
+            postEntries.push({ id });
+          } else {
+            const content = (await fs.promises.readFile(
+              full,
+              "utf8",
+            )) as string;
+            postEntries.push({ id, content });
+          }
         }
       }
     }
   }
 
   await walk(dir);
-  return entries;
+  return postEntries;
 }

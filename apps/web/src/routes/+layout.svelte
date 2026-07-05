@@ -1,6 +1,7 @@
 <script lang="ts">
   import "../app.css";
   import { onMount } from "svelte";
+  import { dev } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
   import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
   import { Bolt } from "@lucide/svelte";
@@ -38,10 +39,13 @@
 
 <svelte:head>
   <link rel="icon" href={favicon} />
+  {#if !dev}
+    <link rel="manifest" href="/manifest.webmanifest" />
+  {/if}
 </svelte:head>
 
 <header
-  class="flex items-center justify-between px-4 py-3 bg-card max-w-240 mx-auto"
+  class="flex items-center justify-between px-4 py-4 bg-card max-w-240 mx-auto"
 >
   <ProjectNav />
   <nav class="flex items-center gap-3 text-sm">

@@ -6,14 +6,14 @@ import type {
 } from "$lib/shared/types";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDB(): Promise<IDBPDatabase> {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         if (oldVersion < 1) {
           if (!db.objectStoreNames.contains("documents")) {
             db.createObjectStore("documents", {
@@ -46,18 +46,50 @@ function getDB(): Promise<IDBPDatabase> {
             db.createObjectStore("preferences", { keyPath: "id" });
           }
         }
+        if (oldVersion < 5 && tx) {
+          const store = tx.objectStore("posts");
+          if (store.indexNames.contains("by_dirty")) {
+            store.deleteIndex("by_dirty");
+          }
+          if (!store.indexNames.contains("by_project_dirty")) {
+            store.createIndex("by_project_dirty", ["projectId", "dirty"], {
+              unique: false,
+            });
+          }
+        }
       },
     });
   }
   return dbPromise;
 }
 
-export async function dbGetPosts(projectId: string): Promise<IPostRecord[]> {
+export async function dbGetPosts(
+  projectId: string,
+  opts: { limit?: number; offset?: number } = {},
+): Promise<IPostRecord[]> {
+  const { limit, offset = 0 } = opts;
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const posts = await store.getAll();
-  return posts.filter((p) => p.projectId === projectId);
+  const range = IDBKeyRange.bound([projectId, ""], [projectId, "\uffff"]);
+
+  if (limit === undefined) {
+    const all: IPostRecord[] = await store.getAll(range);
+    await tx.done;
+    return all.reverse();
+  }
+
+  let cursor = await store.openCursor(range, "prev");
+  if (!cursor) return [];
+  if (offset > 0) cursor = await cursor.advance(offset);
+  if (!cursor) return [];
+  const posts: IPostRecord[] = [];
+  while (cursor && posts.length < limit) {
+    posts.push(cursor.value);
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return posts;
 }
 
 export async function dbGetPost(
@@ -88,8 +120,10 @@ export async function dbGetDirtyPosts(
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
   const store = tx.objectStore("posts");
-  const posts = await store.getAll();
-  return posts.filter((p) => p.projectId === projectId && p.dirty);
+  const index = store.index("by_project_dirty");
+  const dirty = await index.getAll(IDBKeyRange.only([projectId, 1]));
+  await tx.done;
+  return dirty;
 }
 
 // ── Projects cache ────────────────────────────────
@@ -99,20 +133,22 @@ export async function dbGetProjects(): Promise<TProjectEntry[]> {
   return db.getAll("projects");
 }
 
-export async function dbSaveProjects(projects: TProjectEntry[]): Promise<void> {
+export async function dbSaveProjects(
+  projectEntries: TProjectEntry[],
+): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("projects", "readwrite");
   const store = tx.objectStore("projects");
   await store.clear();
-  for (const p of projects) {
-    await store.put(p);
+  for (const p of projectEntries) {
+    await store.put({ ...p });
   }
   await tx.done;
 }
 
 export async function dbSaveProject(project: TProjectEntry): Promise<void> {
   const db = await getDB();
-  await db.put("projects", project);
+  await db.put("projects", { ...project });
 }
 
 // ── Preferences cache ─────────────────────────────
@@ -122,7 +158,7 @@ export async function dbGetPrefs(): Promise<IUserPreferences | undefined> {
   return db.get("preferences", "default");
 }
 
-export async function dbSavePrefs(prefs: IUserPreferences): Promise<void> {
+export async function dbSavePrefs(userPrefs: IUserPreferences): Promise<void> {
   const db = await getDB();
-  await db.put("preferences", { ...prefs, id: "default" });
+  await db.put("preferences", { ...userPrefs, id: "default" });
 }

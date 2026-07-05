@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { projects, getProject } from "$lib/stores/projects.svelte";
   import { syncer } from "$lib/stores/syncer.svelte";
   import { api } from "$lib/api";
   import { encryptToken, bytesToApi } from "$lib/crypto";
@@ -48,24 +48,23 @@
       return null;
     }
 
-    const entry: TProjectEntry = {
-      ...project,
-      status: "cloning",
-      error: "",
-    };
+    projects.value = [
+      { ...project, status: "cloning", error: "" } as TProjectEntry,
+      ...projects.value,
+    ];
 
-    projects.value = [entry, ...projects.value];
+    const projectEntry = getProject(project.id);
+    if (!projectEntry) {
+      formSubmitting = false;
+      return null;
+    }
 
     try {
-      await syncer.initialPull(entry, token);
-      const proxied = projects.value.find((p) => p.id === entry.id);
-      if (proxied) proxied.status = "ready";
+      await syncer.initialPull(projectEntry, token);
+      projectEntry.status = "ready";
     } catch (err) {
-      const proxied = projects.value.find((p) => p.id === entry.id);
-      if (proxied) {
-        proxied.status = "error";
-        proxied.error = err instanceof Error ? err.message : "Clone failed";
-      }
+      projectEntry.status = "error";
+      projectEntry.error = err instanceof Error ? err.message : "Clone failed";
       formSubmitting = false;
       return null;
     }
@@ -271,7 +270,7 @@
           <div class="flex items-center gap-2 mt-2">
             <span
               class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full {isReady
-                ? 'bg-emerald-500/12 text-emerald-500'
+                ? 'bg-green-500/12 text-green-500'
                 : isCloning
                   ? 'bg-amber-500/12 text-amber-500'
                   : isError

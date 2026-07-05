@@ -1,4 +1,5 @@
 import type { BtsvPostFrontmatter } from "$lib/contract/frontmatter";
+import type { DebouncedSaver } from "$lib/saver";
 
 // ── Enums ──────────────────────────────────────────
 
@@ -10,9 +11,25 @@ export enum Route {
 
 export enum SyncState {
   SYNCED = "synced",
+  SYNCING_PULL = "syncing-pull",
+  SYNCING_PUSH = "syncing-push",
   DIRTY = "dirty",
-  SYNCING = "syncing",
   ERROR = "error",
+  CONFLICT = "conflict",
+}
+
+export enum SyncerOps {
+  PULL = "pull",
+  PUSH = "push",
+  DELETE = "delete",
+  INITIAL_PULL = "initialPull",
+}
+
+export interface ISyncerProjectQueueValue {
+  tail: Promise<unknown>;
+  lastPromise: Promise<unknown>;
+  lastOp: SyncerOps;
+  lastOpResolved: boolean;
 }
 
 // ── Interfaces ─────────────────────────────────────
@@ -28,6 +45,12 @@ export interface IProject {
   repoUrl: string;
 }
 
+export interface ISyncStatus {
+  state: SyncState;
+  errorMsg: string;
+  dirty: boolean;
+}
+
 export interface IUserPreferences {
   syncType: TSyncType;
   proxyUrl: string;
@@ -35,28 +58,36 @@ export interface IUserPreferences {
 
 export interface IPostEntry {
   id: string;
-  content: string;
+  content?: string;
+  deleted?: boolean;
 }
 
 export interface IRemoteCheckResult {
   hasChanges: boolean;
   lastCommitTime?: number;
+  headSha?: string;
 }
 
-export type TSyncHook = (
-  projectId?: string,
-  postId?: string,
-  syncedPost?: IPostRecord,
-  lastCommitTime?: number,
-) => void;
-
 export interface ISyncAdapter {
-  checkRemote(projectId: string, gitToken: string): Promise<IRemoteCheckResult>;
-  pull(projectId: string, gitToken: string): Promise<IPostEntry[]>;
+  checkRemote(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+  ): Promise<IRemoteCheckResult>;
+  pull(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+    headSha?: string,
+  ): Promise<IPostEntry[]>;
   initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }>;
+  ): Promise<{
+    postEntries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }>;
   commitAndPush(
     projectId: string,
     postId: string,
@@ -114,7 +145,7 @@ export interface IPostRecord extends BtsvPostFrontmatter {
   draft: boolean;
   body: string;
   extra: Record<string, unknown>;
-  dirty: boolean;
+  dirty: 0 | 1;
 }
 
 export interface IGitState {
@@ -131,45 +162,52 @@ export interface ICloneOpts {
   onDebug: (msg: string) => void;
 }
 
-export interface IDebouncedSaverParams {
+export interface IDebouncedSaverConfig {
   projectId: string;
   getWorkingPost: () => IPostRecord | null;
   getTagsInput: () => string;
-  initialPost: IPostRecord | null;
   gitBaseline?: IPostRecord | null;
   onSave: (post: IPostRecord) => void;
   onError: (error: string) => void;
 }
 
-export interface IParseResult {
-  post: Pick<
-    IPostRecord,
-    | "id"
-    | "slug"
-    | "title"
-    | "dateCreated"
-    | "dateUpdated"
-    | "datePublished"
-    | "description"
-    | "tags"
-    | "draft"
-    | "body"
-    | "extra"
-  >;
+export interface ICurrentSaver {
+  projectId: string;
+  postId: string;
+  saver: DebouncedSaver;
 }
 
-export interface IDocument {
-  projectId: string;
-  path: string;
-  content: string;
-  updatedAt: number;
+export interface ISyncerConfig {
+  getPrefs: () => IUserPreferences;
+  getProjects: () => TProjectEntry[];
+  isPostEditing?(projectId: string, postId: string): boolean;
+  onSyncStatus?(
+    projectId: string,
+    status: Omit<ISyncStatus, "dirty">,
+    dirtyOverride: boolean | null,
+  ): void;
+}
+
+export interface ILoadPostsOpts {
+  forcePull?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 
 // ── Type aliases ───────────────────────────────────
 
+export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
+
 export type TGitStatus = string;
 
 export type TSyncType = "git" | "api";
+
+export type TSyncHook = (
+  projectId?: string,
+  postId?: string,
+  syncedPost?: IPostRecord,
+  lastCommitTime?: number,
+) => void;
 
 type TMetadataKey =
   | "projectId"
@@ -180,10 +218,13 @@ type TMetadataKey =
 
 export type TContentKey = Exclude<keyof IPostRecord, TMetadataKey>;
 
+export type IPostContent = Omit<IPostRecord, TMetadataKey>;
+
 export type TProjectEntry = IProject & {
   status: "unknown" | "ready" | "cloning" | "error";
   error: string;
   syncType?: TSyncType;
+  storedRemoteSha?: string;
 };
 
 // ── Key-set constants ──────────────────────────────

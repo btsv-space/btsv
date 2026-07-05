@@ -3,13 +3,7 @@ import type {
   IPostEntry,
   IRemoteCheckResult,
 } from "$lib/shared/types";
-import {
-  getPostPath,
-  writePostFile,
-  deletePostFile,
-  readApiRemoteSha,
-  writeApiRemoteSha,
-} from "$lib/fs";
+import { getPostPath, writePostFile, deletePostFile } from "$lib/fs";
 import {
   POST_EXT,
   DEFAULT_GIT_BRANCH,
@@ -36,6 +30,8 @@ function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   return { owner, repo };
 }
 
+class CompareBaseNotFoundError extends Error {}
+
 // TODO: consider whether to use SDK (e.g. @octokit/rest for GitHub)
 export class ApiAdapter implements ISyncAdapter {
   private owner: string;
@@ -50,8 +46,9 @@ export class ApiAdapter implements ISyncAdapter {
   }
 
   async checkRemote(
-    projectId: string,
+    _projectId: string,
     gitToken: string,
+    storedRemoteSha?: string,
   ): Promise<IRemoteCheckResult> {
     try {
       const res = await fetch(
@@ -65,15 +62,18 @@ export class ApiAdapter implements ISyncAdapter {
       );
       if (!res.ok) return { hasChanges: true };
       const data = await res.json();
-      const remoteSha: string = data.commit?.sha ?? "";
-      if (!remoteSha) return { hasChanges: true };
-      const stored = await readApiRemoteSha(projectId);
+      const headSha: string = data.commit?.sha ?? "";
+      if (!headSha) return { hasChanges: true };
 
       let lastCommitTime: number | undefined;
       const dateStr = data?.commit?.commit?.committer?.date;
       if (dateStr) lastCommitTime = new Date(dateStr).getTime();
 
-      return { hasChanges: stored !== remoteSha, lastCommitTime };
+      return {
+        hasChanges: storedRemoteSha !== headSha,
+        lastCommitTime,
+        headSha,
+      };
     } catch {
       return { hasChanges: true };
     }
@@ -82,18 +82,24 @@ export class ApiAdapter implements ISyncAdapter {
   async initialPull(
     projectId: string,
     gitToken: string,
-  ): Promise<{ entries: IPostEntry[]; lastCommitTime?: number }> {
+  ): Promise<{
+    postEntries: IPostEntry[];
+    lastCommitTime?: number;
+    headSha?: string;
+  }> {
     const branchRes = await fetch(
       `https://api.github.com/repos/${this.owner}/${this.repo}/branches/${encodeURIComponent(this.gitBranch)}`,
       { headers: { Authorization: `Bearer ${gitToken}` } },
     );
 
     let lastCommitTime: number | undefined;
+    let headSha: string | undefined;
 
     if (branchRes.ok) {
       const data = await branchRes.json();
       const dateStr = data?.commit?.commit?.committer?.date;
       if (dateStr) lastCommitTime = new Date(dateStr).getTime();
+      headSha = data?.commit?.sha ?? undefined;
     }
 
     if (!branchRes.ok) {
@@ -120,8 +126,8 @@ export class ApiAdapter implements ISyncAdapter {
       }
     }
 
-    const entries = await this.pull(projectId, gitToken);
-    return { entries, lastCommitTime };
+    const postEntries = await this.pull(projectId, gitToken);
+    return { postEntries, lastCommitTime, headSha };
   }
 
   async mergeToMain(projectId: string, gitToken: string): Promise<void> {
@@ -159,7 +165,147 @@ export class ApiAdapter implements ISyncAdapter {
     }
   }
 
-  async pull(projectId: string, gitToken: string): Promise<IPostEntry[]> {
+  async pull(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha?: string,
+    headSha?: string,
+  ): Promise<IPostEntry[]> {
+    if (storedRemoteSha && headSha) {
+      try {
+        return await this.#pullViaCompare(
+          projectId,
+          gitToken,
+          storedRemoteSha,
+          headSha,
+        );
+      } catch (err) {
+        if (err instanceof CompareBaseNotFoundError) {
+          console.warn(
+            "[api] compare base sha not found, falling back to GraphQL pull",
+          );
+        } else {
+          throw err;
+        }
+      }
+    }
+    return this.#pullViaGraphQL(projectId, gitToken);
+  }
+
+  async #pullViaCompare(
+    projectId: string,
+    gitToken: string,
+    storedRemoteSha: string,
+    headSha: string,
+  ): Promise<IPostEntry[]> {
+    const compareRes = await fetch(
+      `https://api.github.com/repos/${this.owner}/${this.repo}/compare/${storedRemoteSha}...${headSha}`,
+      {
+        headers: {
+          Authorization: `Bearer ${gitToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      },
+    );
+
+    if (compareRes.status === 404) {
+      const body = await compareRes.text().catch(() => "");
+      throw new CompareBaseNotFoundError(
+        `compare base sha not found: 404 ${body}`,
+      );
+    }
+
+    if (compareRes.status === 403) {
+      const body = await compareRes.text().catch(() => "");
+      throw new Error(`GitHub compare API failed: 403 ${body}`);
+    }
+
+    if (!compareRes.ok) {
+      const body = await compareRes.text().catch(() => "");
+      throw new Error(
+        `GitHub compare API failed: ${compareRes.status} ${body}`,
+      );
+    }
+
+    const data = await compareRes.json();
+    const files: Array<{ filename: string; status: string }> =
+      data?.files ?? [];
+
+    return this.#processCompareFiles(files, projectId, headSha, gitToken);
+  }
+
+  async #processCompareFiles(
+    files: Array<{ filename: string; status: string }>,
+    projectId: string,
+    headSha: string,
+    gitToken: string,
+  ): Promise<IPostEntry[]> {
+    const removedEntries: IPostEntry[] = [];
+    const fetchJobs: Array<{ id: string; filename: string }> = [];
+
+    for (const file of files) {
+      if (!file.filename.endsWith(POST_EXT)) continue;
+      const id = file.filename.split("/").pop()!.replace(POST_EXT, "");
+
+      if (file.status === "removed") {
+        try {
+          await deletePostFile(projectId, id);
+        } catch (err) {
+          console.debug(
+            `[api] deletePostFile (removed via compare) error, file may not exist:`,
+            err,
+          );
+        }
+        removedEntries.push({ id, deleted: true });
+        continue;
+      }
+
+      fetchJobs.push({ id, filename: file.filename });
+    }
+
+    const fetchedEntries = await Promise.all(
+      fetchJobs.map(async (job): Promise<IPostEntry | null> => {
+        const content = await this.#fetchFileContent(
+          job.filename,
+          headSha,
+          gitToken,
+        );
+        if (content === null) return null;
+        await writePostFile(projectId, job.id, content);
+        return { id: job.id, content };
+      }),
+    );
+
+    return [
+      ...removedEntries,
+      ...fetchedEntries.filter((e): e is IPostEntry => e !== null),
+    ];
+  }
+
+  async #fetchFileContent(
+    filepath: string,
+    ref: string,
+    gitToken: string,
+  ): Promise<string | null> {
+    const res = await fetch(
+      `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${filepath}?ref=${encodeURIComponent(ref)}`,
+      { headers: { Authorization: `Bearer ${gitToken}` } },
+    );
+    if (!res.ok) {
+      console.warn(
+        `[api] contents fetch failed for ${filepath}: ${res.status}`,
+      );
+      return null;
+    }
+    const data = await res.json();
+    if (typeof data.content !== "string") return null;
+    return b64Decode(data.content);
+  }
+
+  async #pullViaGraphQL(
+    projectId: string,
+    gitToken: string,
+  ): Promise<IPostEntry[]> {
     const query = `
 			query($owner: String!, $repo: String!, $expression: String!) {
 				repository(owner: $owner, name: $repo) {
@@ -179,7 +325,7 @@ export class ApiAdapter implements ISyncAdapter {
 			}
 		`;
 
-    const graphqlPromise = fetch("https://api.github.com/graphql", {
+    const graphqlRes = await fetch("https://api.github.com/graphql", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -195,21 +341,6 @@ export class ApiAdapter implements ISyncAdapter {
       }),
     });
 
-    const branchPromise = fetch(
-      `https://api.github.com/repos/${this.owner}/${this.repo}/branches/${encodeURIComponent(this.gitBranch)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${gitToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      },
-    );
-
-    const [graphqlRes, branchRes] = await Promise.all([
-      graphqlPromise,
-      branchPromise,
-    ]);
-
     if (!graphqlRes.ok) {
       const body = await graphqlRes.text();
       throw new Error(`GraphQL pull failed: ${graphqlRes.status} ${body}`);
@@ -221,31 +352,21 @@ export class ApiAdapter implements ISyncAdapter {
       throw new Error(`GraphQL pull errors: ${JSON.stringify(json.errors)}`);
     }
 
-    const entries: IPostEntry[] = [];
+    const postEntries: IPostEntry[] = [];
     const tree = json?.data?.repository?.object?.entries ?? [];
 
-    for (const entry of tree) {
-      if (!entry.name.endsWith(POST_EXT)) continue;
+    for (const treeEntry of tree) {
+      if (!treeEntry.name.endsWith(POST_EXT)) continue;
 
-      const id = entry.name.replace(POST_EXT, "");
-      const content: string = entry.object?.text ?? "";
+      const id = treeEntry.name.replace(POST_EXT, "");
+      const content: string = treeEntry.object?.text ?? "";
 
       await writePostFile(projectId, id, content);
 
-      entries.push({ id, content });
+      postEntries.push({ id, content });
     }
 
-    try {
-      if (branchRes.ok) {
-        const branchData = await branchRes.json();
-        const sha = branchData.commit?.sha ?? null;
-        if (sha) await writeApiRemoteSha(projectId, sha);
-      }
-    } catch (err) {
-      console.debug("[api] pull best-effort error:", err);
-    }
-
-    return entries;
+    return postEntries;
   }
 
   async commitAndPush(
@@ -274,8 +395,6 @@ export class ApiAdapter implements ISyncAdapter {
     );
 
     const result = await putRes.json();
-    if (result.commit?.sha)
-      await writeApiRemoteSha(projectId, result.commit.sha);
     return result.commit?.sha ?? null;
   }
 
@@ -327,8 +446,6 @@ export class ApiAdapter implements ISyncAdapter {
     }
 
     const result = await delRes.json();
-    if (result.commit?.sha)
-      await writeApiRemoteSha(projectId, result.commit.sha);
     return result.commit?.sha ?? null;
   }
 }

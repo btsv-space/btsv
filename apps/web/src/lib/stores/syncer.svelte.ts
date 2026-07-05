@@ -1,76 +1,86 @@
 import { Syncer } from "$lib/sync/syncer";
 import { prefs } from "$lib/stores/prefs.svelte";
-import { projects } from "$lib/stores/projects.svelte";
-import { posts } from "$lib/stores/posts.svelte";
-import { dbGetPosts, dbSaveProject } from "$lib/db";
-import { SvelteMap } from "svelte/reactivity";
-import { SyncState } from "$lib/shared/types";
-import { setProjectCommitTime } from "$lib/stores/recentProject.svelte";
-
-export const syncStates = new SvelteMap<string, SyncState>();
-export const syncErrors = new SvelteMap<string, string>();
+import { projects, getProject } from "$lib/stores/projects.svelte";
+import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
+import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
+import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
+import { setProjectCommitTime } from "$lib/stores/recentProject";
+import { syncStatus } from "$lib/stores/syncStatus.svelte";
+import { getCurrentSaver } from "$lib/stores/currentSaver";
 
 export const syncer = new Syncer({
   getPrefs: () => prefs.value,
   getProjects: () => projects.value,
-  onStateChange: (pid, state) => {
-    syncStates.set(pid, state);
+  isPostEditing: (projectId, postId) => {
+    const currentSaver = getCurrentSaver();
+    return (
+      currentSaver?.projectId === projectId && currentSaver?.postId === postId
+    );
   },
-  onError: (pid, err) => {
-    syncErrors.set(pid, err);
+  onSyncStatus: (projectId, status, dirtyOverride) => {
+    syncStatus.setStateAndMsg(projectId, status);
+    syncStatus.updateDirty(projectId, dirtyOverride);
   },
 });
 
-syncer.addAfterSyncHook((projectId, _postId, syncedPost, lastCommitTime) => {
-  if (projectId != null && syncedPost != null) {
-    const idx = posts.value.findIndex((p) => p.id === syncedPost.id);
-    if (idx >= 0) {
-      posts.value[idx] = syncedPost;
-    }
-  }
+syncer.addAfterSyncHook((projectId, postId, syncedPost, lastCommitTime) => {
   if (projectId != null && lastCommitTime != null) {
     setProjectCommitTime(projectId, lastCommitTime);
   }
 });
 
+const defaultLoadPostsOpts = {
+  forcePull: false,
+  page: 1,
+  pageSize: POSTS_PAGE_SIZE,
+} satisfies ILoadPostsOpts;
+
 export async function loadPosts(
   projectId: string,
-  forcePull = false,
-): Promise<void> {
-  const cached = await dbGetPosts(projectId);
-  if (cached.length > 0) {
-    posts.value = cached.sort((a, b) => b.id.localeCompare(a.id));
-  }
+  opts: ILoadPostsOpts = {},
+): Promise<IPostRecord[]> {
+  const { forcePull, page, pageSize } = { ...defaultLoadPostsOpts, ...opts };
+  const offset = (page - 1) * pageSize;
 
-  const project = projects.value.find((p) => p.id === projectId);
+  const project = getProject(projectId);
   if (!project) {
     console.error(`[loadPosts] project not found: ${projectId}`);
-    return;
+    return [];
   }
 
   const syncTypeChanged =
     project.syncType !== undefined && project.syncType !== prefs.value.syncType;
   const shouldPull = forcePull || syncTypeChanged;
 
-  console.log(
-    `[loadPosts] ${projectId}: cached=${cached.length} syncTypeChanged=${syncTypeChanged} shouldPull=${shouldPull}`,
-  );
-
   if (shouldPull) {
-    console.log(`[loadPosts] ${projectId}: pulling...`);
-    const parsed = await syncer.pull(project);
-    if (parsed.length > 0) {
-      posts.value = parsed.sort((a, b) => b.id.localeCompare(a.id));
-    }
-    console.log(
-      `[loadPosts] ${projectId}: pull returned ${parsed.length} posts`,
-    );
+    await syncer.pull(project);
+    console.log(`[loadPosts] ${projectId}: page=${page} using pulled posts`);
   } else {
-    console.log(`[loadPosts] ${projectId}: using cached, no pull`);
+    console.log(`[loadPosts] ${projectId}: page=${page} using cached, no pull`);
   }
 
   if (syncTypeChanged) {
     project.syncType = prefs.value.syncType;
-    await dbSaveProject({ ...project });
+    await dbSaveProject(project);
   }
+
+  return await dbGetPosts(projectId, { limit: pageSize, offset });
+}
+
+export async function loadPost(
+  projectId: string,
+  postId: string,
+  opts: { forcePull?: boolean } = {},
+): Promise<IPostRecord | null> {
+  if (opts.forcePull) {
+    const project = getProject(projectId);
+    if (project) {
+      try {
+        await syncer.pull(project);
+      } catch (err) {
+        console.warn(`[loadPost] pull failed for ${projectId}/${postId}:`, err);
+      }
+    }
+  }
+  return (await dbGetPost(projectId, postId)) ?? null;
 }

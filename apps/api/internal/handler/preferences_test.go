@@ -35,8 +35,8 @@ func TestGetPreferencesReturnsDefault(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&prefs); err != nil {
 		t.Fatal(err)
 	}
-	if prefs.SyncType != "git" {
-		t.Fatalf("expected syncType 'git', got '%s'", prefs.SyncType)
+	if prefs.SyncType != "api" {
+		t.Fatalf("expected syncType 'api', got '%s'", prefs.SyncType)
 	}
 	if prefs.ProxyURL != "" {
 		t.Fatalf("expected empty default proxyUrl, got '%s'", prefs.ProxyURL)
@@ -105,8 +105,8 @@ func TestUpdatePreferencesProxyURLOnly(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&prefs); err != nil {
 		t.Fatal(err)
 	}
-	if prefs.SyncType != "git" {
-		t.Fatalf("expected default syncType 'git', got '%s'", prefs.SyncType)
+	if prefs.SyncType != "api" {
+		t.Fatalf("expected default syncType 'api', got '%s'", prefs.SyncType)
 	}
 	if prefs.ProxyURL != "http://custom:7777" {
 		t.Fatalf("expected proxyUrl 'http://custom:7777', got '%s'", prefs.ProxyURL)

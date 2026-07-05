@@ -2,7 +2,7 @@ import matter from "gray-matter";
 import {
   KNOWN_KEYS,
   type IPostRecord,
-  type IParseResult,
+  type TParsedPost,
 } from "$lib/shared/types";
 import type { BtsvPostFrontmatter } from "$lib/contract/frontmatter";
 import { today } from "$lib/shared/utils";
@@ -24,13 +24,13 @@ function extractExtra(data: Record<string, unknown>): Record<string, unknown> {
   return extra;
 }
 
-export function parseMdx(raw: string, id: string): IParseResult {
+export function parseMdx(raw: string, id: string): TParsedPost {
   const { data, content } = matter(raw);
   const fm = data as BtsvPostFrontmatter;
 
   const extra = extractExtra(fm as unknown as Record<string, unknown>);
 
-  const post = {
+  return {
     id: String(fm.id ?? id),
     slug: String(fm.slug ?? ""),
     title: String(fm.title ?? ""),
@@ -46,8 +46,6 @@ export function parseMdx(raw: string, id: string): IParseResult {
     body: content.trim(),
     extra,
   };
-
-  return { post };
 }
 
 export function serializeMdx(post: IPostRecord): string {
@@ -70,19 +68,4 @@ export function serializeMdx(post: IPostRecord): string {
   }
 
   return matter.stringify(post.body, fm);
-}
-
-export function computeSaveDates(
-  post: IPostRecord,
-): Pick<IPostRecord, "dateUpdated" | "datePublished"> {
-  const result: Pick<IPostRecord, "dateUpdated" | "datePublished"> = {
-    dateUpdated: today(),
-    datePublished: post.datePublished,
-  };
-
-  if (!post.draft && !post.datePublished) {
-    result.datePublished = today();
-  }
-
-  return result;
 }

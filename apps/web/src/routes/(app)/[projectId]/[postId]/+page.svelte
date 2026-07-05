@@ -2,18 +2,23 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { untrack, onMount, onDestroy } from "svelte";
-  import { posts } from "$lib/stores/posts.svelte";
-  import { loadPosts } from "$lib/stores/syncer.svelte";
-  import { syncer } from "$lib/stores/syncer.svelte";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { syncer, loadPost } from "$lib/stores/syncer.svelte";
+  import { getProject } from "$lib/stores/projects.svelte";
   import { readPostContent } from "$lib/fs";
   import { parseMdx } from "$lib/parser";
   import { DebouncedSaver } from "$lib/saver";
-  import type { IPostRecord, TProjectEntry } from "$lib/shared/types";
+  import { syncStatus } from "$lib/stores/syncStatus.svelte";
+  import {
+    createCurrentSaver,
+    destroyCurrentSaver,
+  } from "$lib/stores/currentSaver";
+  import { type IPostRecord } from "$lib/shared/types";
+  import { today } from "$lib/shared/utils";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
+  import { dbGetPost } from "$lib/db";
 
   const projectId = page.params.projectId!;
   const postId = page.params.postId!;
@@ -31,27 +36,20 @@
   }
 
   async function deletePost(pid: string, id: string): Promise<void> {
-    const project = projects.value.find((p: TProjectEntry) => p.id === pid);
+    const project = getProject(pid);
     if (!project) {
       console.error(`[post] cannot delete ${id}: project ${pid} not found`);
       return;
     }
     await syncer.commitDeletion(project, id);
-    const idx = posts.value.findIndex(
-      (p) => p.id === id && p.projectId === pid,
-    );
-    if (idx >= 0) {
-      posts.value.splice(idx, 1);
-    }
   }
 
-  // let workingPost = $state<IPostRecord | null>(null);
-  let workingPost = $derived(posts.value.find((p) => p.id === postId) || null);
+  let workingPost = $state<IPostRecord | null>(null);
   let tagsInput = $state("");
   let saveError = $state<{ title: string; message: string } | null>(null);
   let showDeleteConfirm = $state(false);
   let isWriteMode = $state(true);
-  let containerEl: HTMLDivElement | undefined;
+  let containerEl: HTMLDivElement | undefined = $state();
 
   let saver: DebouncedSaver | null = null;
   let unregisterHook: (() => void) | null = null;
@@ -78,7 +76,8 @@
     if (saver) {
       await saver.flush();
     }
-    await syncer.syncDirtyPosts(projectId);
+    const project = getProject(projectId);
+    if (project) await syncer.push(project);
   }
 
   async function handleBack() {
@@ -89,12 +88,24 @@
     saveError = null;
   }
 
+  function tagsArrToString(tagsArr: string[] | undefined): string {
+    if (!tagsArr) return "";
+    return tagsArr.join(", ");
+  }
+
   function handleTitleBlur() {
     // Derive slug from title when slug is empty
     if (!workingPost!.slug && workingPost!.title) {
       untrack(() => {
         workingPost!.slug = deriveSlug(workingPost!.title);
       });
+    }
+  }
+
+  function handlePublishToggle(v: boolean) {
+    workingPost!.draft = !v;
+    if (v && !workingPost!.datePublished) {
+      workingPost!.datePublished = today();
     }
   }
 
@@ -113,40 +124,38 @@
   }
 
   onMount(async () => {
-    loadPosts(projectId, true);
-    if (!workingPost) {
+    // load cached post first
+    const cachedPost = (await dbGetPost(projectId, postId)) || null;
+    if (cachedPost) {
+      workingPost = cachedPost;
+      tagsInput = tagsArrToString(cachedPost.tags);
+    }
+    // pull from origin and load it
+    const freshPost = await loadPost(projectId, postId, { forcePull: true });
+    if (!freshPost) {
       goto(`/${projectId}`);
       return;
     }
+    workingPost = freshPost;
 
-    tagsInput = workingPost.tags.join(", ");
+    tagsInput = tagsArrToString(workingPost.tags);
 
     let gitBaseline: IPostRecord | null = null;
     try {
       const raw = await readPostContent(projectId, postId);
-      const { post: parsed } = parseMdx(raw, postId);
-      gitBaseline = {
-        ...workingPost,
-        ...parsed,
-        dirty: false,
-      };
+      const parsed = parseMdx(raw, postId);
+      gitBaseline = { ...workingPost, ...parsed };
     } catch {
       // New post — not yet in git
     }
 
-    saver = new DebouncedSaver({
+    saver = createCurrentSaver({
       projectId,
       gitBaseline,
       getWorkingPost: () => workingPost,
       getTagsInput: () => tagsInput,
-      initialPost: workingPost,
-      onSave: (saved) => {
-        const idx = posts.value.findIndex(
-          (p) => p.id === saved.id && p.projectId === saved.projectId,
-        );
-        if (idx >= 0) {
-          posts.value[idx] = { ...saved };
-        }
+      onSave: () => {
+        syncStatus.updateDirty(projectId);
       },
       onError: (err) => {
         console.error("[editor] save failed:", err);
@@ -157,14 +166,17 @@
     unregisterHook = syncer.addAfterSyncHook((pid, id, syncedPost) => {
       if (pid === projectId && id === postId && syncedPost) {
         saver?.updateBaseline(syncedPost);
-        tagsInput = syncedPost.tags.join(", ");
       }
     });
   });
 
   onDestroy(() => {
     unregisterHook?.();
-    saver?.flush().then(() => syncer.syncDirtyPosts(projectId));
+    saver?.flush().then(() => {
+      const project = getProject(projectId);
+      if (project) syncer.push(project);
+      destroyCurrentSaver();
+    });
   });
 
   $effect(() => {
@@ -172,7 +184,7 @@
 
     function beforeUnload(e: BeforeUnloadEvent) {
       // Warns the user with the browser's native "unsaved changes" dialog
-      if (saver?.isUnsaved() ?? false) {
+      if (saver?.isScheduled() ?? false) {
         e.preventDefault();
         e.returnValue = true;
       }
@@ -300,6 +312,7 @@
           type="text"
           bind:value={workingPost.title}
           onblur={handleTitleBlur}
+          placeholder="Title"
           class="text-muted-foreground md:hidden bg-transparent border-none p-0 m-0 font-inherit text-base"
         />
         <label
@@ -380,7 +393,7 @@
         <label class="flex flex-row items-center gap-2 cursor-pointer">
           <Switch
             checked={!workingPost.draft}
-            onCheckedChange={(v) => (workingPost!.draft = !v)}
+            onCheckedChange={handlePublishToggle}
             class="my-1"
           />
           <span

@@ -4,10 +4,10 @@ import { decryptToken, dekFromBase64, bytesFromApi } from "$lib/crypto";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { Route, type IUser, type TSyncType } from "$lib/shared/types";
 import { SvelteMap } from "svelte/reactivity";
-import { posts } from "$lib/stores/posts.svelte";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects } from "$lib/stores/projects.svelte";
-import { syncErrors, syncStates, syncer } from "$lib/stores/syncer.svelte";
+import { syncer } from "$lib/stores/syncer.svelte";
+import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 const DEK_KEY = `${APP_NAMESPACE}_dek`;
 
@@ -90,11 +90,9 @@ export async function logout() {
     currentUser.value = null;
     isAuthenticated.value = false;
     dek.value = null;
-    posts.value = [];
     projects.value = [];
-    syncStates.clear();
-    syncErrors.clear();
-    prefs.value = { syncType: "git" as TSyncType, proxyUrl: "" };
+    syncStatus.clear();
+    prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
     goto(Route.LOGIN, { replaceState: true });
   }
 }

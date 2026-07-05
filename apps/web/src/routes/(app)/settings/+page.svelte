@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { fly } from "svelte/transition";
   import { api } from "$lib/api";
   import { prefs } from "$lib/stores/prefs.svelte";
@@ -11,11 +10,11 @@
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
-  let syncType = $state<TSyncType>("git");
-  let proxyUrl = $state("");
+  let syncType = $state<TSyncType>(prefs.value.syncType);
+  let proxyUrl = $state(prefs.value.proxyUrl);
   let saveState = $state<SaveState>("idle");
   let saveMsg = $state("");
-  let prevSyncType = $state<TSyncType>("git");
+  let prevSyncType = $state<TSyncType>(prefs.value.syncType);
 
   let dismissTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -33,12 +32,6 @@
     }
   }
 
-  onMount(async () => {
-    syncType = prefs.value.syncType;
-    proxyUrl = prefs.value.proxyUrl;
-    prevSyncType = prefs.value.syncType;
-  });
-
   async function handleChange() {
     showToast("saving", "Saving...");
 
@@ -52,12 +45,15 @@
 
       if (syncType !== prevSyncType) {
         prevSyncType = syncType;
-        for (const p of projects.value) {
-          if (p.status === "ready") {
+        for (const project of projects.value) {
+          if (project.status === "ready") {
             syncer
-              .pull(p)
+              .pull(project)
               .catch((err) =>
-                console.error(`[settings] auto-pull failed for ${p.id}:`, err),
+                console.error(
+                  `[settings] auto-pull failed for ${project.id}:`,
+                  err,
+                ),
               );
           }
         }
@@ -127,7 +123,7 @@
     'saving'
       ? 'bg-muted text-muted-foreground'
       : saveState === 'success'
-        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-500'
+        ? 'bg-green-500/20 border-green-500 text-green-500'
         : 'bg-destructive/20 border-destructive text-destructive'}"
   >
     {saveMsg}

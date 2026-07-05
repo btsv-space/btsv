@@ -6,12 +6,12 @@ import type {
 
 export async function createSyncAdapter(
   project: IProject,
-  prefs: IUserPreferences,
+  userPrefs: IUserPreferences,
 ): Promise<ISyncAdapter> {
-  if (prefs.syncType === "api") {
+  if (userPrefs.syncType === "api") {
     const { ApiAdapter } = await import("./api-adapter");
     return new ApiAdapter(project.repoUrl);
   }
   const { GitAdapter } = await import("./git-adapter");
-  return new GitAdapter(project.repoUrl, prefs.proxyUrl || undefined);
+  return new GitAdapter(project.repoUrl, userPrefs.proxyUrl || undefined);
 }

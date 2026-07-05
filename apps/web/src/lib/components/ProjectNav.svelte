@@ -1,9 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { projects } from "$lib/stores/projects.svelte";
+  import { projects, getProject } from "$lib/stores/projects.svelte";
   import { isAuthenticated } from "$lib/stores/auth.svelte";
-  import { getProjectCommits } from "$lib/stores/recentProject.svelte";
+  import { getProjectCommits } from "$lib/stores/recentProject";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import Marker from "$lib/components/Marker.svelte";
   import { ChevronDown } from "@lucide/svelte";
@@ -40,9 +40,7 @@
     } else if (currentPath === "/projects") {
       label = "Projects";
     } else if (page.params.projectId) {
-      const project = projects.value.find(
-        (p) => p.id === page.params.projectId,
-      );
+      const project = getProject(page.params.projectId);
       label = project?.name ?? "Projects";
     } else {
       label = "🧱";
