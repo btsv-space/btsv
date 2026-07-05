@@ -1,10 +1,9 @@
 import deepEqual from "fast-deep-equal";
 
 import {
-  CONTENT_KEYS,
+  type IPostContent,
   type IPostRecord,
   type IDebouncedSaverConfig,
-  type TContentKey,
 } from "$lib/shared/types";
 import { dbSavePost } from "$lib/db";
 
@@ -21,42 +20,43 @@ export function normalizePost(
   };
 }
 
-function pickContent(post: IPostRecord): Record<string, unknown> {
-  const picked: Record<string, unknown> = {};
-  for (const key of Object.keys(CONTENT_KEYS) as TContentKey[]) {
-    picked[key] = post[key];
-  }
-  return picked;
+function toContent(post: IPostRecord): IPostContent {
+  const {
+    projectId: _projectId,
+    id: _id,
+    dirty: _dirty,
+    dateCreated: _dateCreated,
+    dateUpdated: _dateUpdated,
+    ...content
+  } = post;
+  return content;
 }
 
-export function contentEqual(a: IPostRecord, b: IPostRecord): boolean {
-  return deepEqual(pickContent(a), pickContent(b));
+export function contentEqual(
+  a: IPostContent | IPostRecord,
+  b: IPostContent | IPostRecord,
+): boolean {
+  const ac = "projectId" in a ? toContent(a) : a;
+  const bc = "projectId" in b ? toContent(b) : b;
+  return deepEqual(ac, bc);
 }
 
 export class DebouncedSaver {
   private timer: ReturnType<typeof setTimeout> | null = null;
-  private lastSaved: IPostRecord | null;
-  private syncBaseline: IPostRecord | null;
+  private syncBaseline: IPostContent | null;
   private config: IDebouncedSaverConfig;
+  private aborter: AbortController | null = null;
 
   constructor(config: IDebouncedSaverConfig) {
     this.config = config;
-    this.lastSaved = config.initialPost
-      ? JSON.parse(JSON.stringify(config.initialPost))
-      : null;
-    // TODO: Do we need to keep a copy of syncBaseline? Might get stale. Can we read fs directly?
     this.syncBaseline = config.gitBaseline
-      ? JSON.parse(JSON.stringify(config.gitBaseline))
+      ? toContent(JSON.parse(JSON.stringify(config.gitBaseline)))
       : null;
   }
 
-  async #write(saved: IPostRecord) {
-    await dbSavePost(saved);
-    this.lastSaved = saved;
-    this.config.onSave(saved);
-  }
+  async #doSave(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
 
-  async #doSave() {
     const workingPost = this.config.getWorkingPost();
     const tagsInput = this.config.getTagsInput();
     if (!workingPost) return;
@@ -64,40 +64,47 @@ export class DebouncedSaver {
     const normalized = normalizePost(workingPost, tagsInput);
 
     try {
-      // No change since last DB save → skip persist,
-      // unless the post was dirty and now matches git (e.g. after a successful push/pull)
-      if (this.lastSaved && contentEqual(normalized, this.lastSaved)) {
-        if (
-          this.syncBaseline &&
-          this.lastSaved.dirty &&
-          contentEqual(normalized, this.syncBaseline)
-        ) {
-          await this.#write({ ...normalized, dirty: 0 });
-        }
-        return;
-      }
-
-      // Content changed: dirty = true, unless it matches what git has
       const needsPush = this.syncBaseline
         ? !contentEqual(normalized, this.syncBaseline)
         : true;
-      await this.#write({ ...normalized, dirty: needsPush ? 1 : 0 });
+      const postSaved: IPostRecord = {
+        ...normalized,
+        dirty: needsPush ? 1 : 0,
+      };
+      await dbSavePost(postSaved);
+
+      if (signal.aborted) return;
+
+      this.config.onSave(postSaved);
     } catch (err) {
       this.config.onError(err instanceof Error ? err.message : "Save failed");
     }
   }
 
+  #abortInflightSave(): AbortSignal {
+    this.aborter?.abort();
+    this.aborter = new AbortController();
+    return this.aborter.signal;
+  }
+
+  isScheduled(): boolean {
+    return this.timer !== null;
+  }
+
   schedule() {
-    if (this.timer) clearTimeout(this.timer);
+    this.cancel();
     this.timer = setTimeout(() => {
+      // this null helps with the isScheduled check
       this.timer = null;
-      void this.#doSave();
-    }, 200);
+      const signal = this.#abortInflightSave();
+      void this.#doSave(signal);
+    }, 50);
   }
 
   async flush() {
     this.cancel();
-    await this.#doSave();
+    const signal = this.#abortInflightSave();
+    await this.#doSave(signal);
   }
 
   cancel() {
@@ -107,14 +114,8 @@ export class DebouncedSaver {
     }
   }
 
-  isUnsaved(): boolean {
-    const workingPost = this.config.getWorkingPost();
-    const tagsInput = this.config.getTagsInput();
-    if (!workingPost || !this.lastSaved) return false;
-    return !contentEqual(normalizePost(workingPost, tagsInput), this.lastSaved);
-  }
-
   updateBaseline(syncedPost: IPostRecord) {
-    this.syncBaseline = JSON.parse(JSON.stringify({ ...syncedPost, dirty: 0 }));
+    this.syncBaseline = toContent(JSON.parse(JSON.stringify(syncedPost)));
+    this.schedule();
   }
 }

@@ -69,18 +69,3 @@ export function serializeMdx(post: IPostRecord): string {
 
   return matter.stringify(post.body, fm);
 }
-
-export function computeSaveDates(
-  post: IPostRecord,
-): Pick<IPostRecord, "dateUpdated" | "datePublished"> {
-  const result: Pick<IPostRecord, "dateUpdated" | "datePublished"> = {
-    dateUpdated: today(),
-    datePublished: post.datePublished,
-  };
-
-  if (!post.draft && !post.datePublished) {
-    result.datePublished = today();
-  }
-
-  return result;
-}

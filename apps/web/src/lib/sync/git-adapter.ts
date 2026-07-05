@@ -233,8 +233,8 @@ export class GitAdapter implements ISyncAdapter {
   async pull(
     projectId: string,
     gitToken: string,
-    _storedRemoteSha?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
-    _headSha?: string, // eslint-disable-line @typescript-eslint/no-unused-vars
+    _storedRemoteSha?: string,
+    _headSha?: string,
   ): Promise<IPostEntry[]> {
     const git = await import("isomorphic-git");
     const { default: http } = await import("isomorphic-git/http/web");

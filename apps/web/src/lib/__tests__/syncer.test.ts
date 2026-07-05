@@ -15,7 +15,6 @@ const {
   mockDeletePost,
   mockGetPost,
   mockSerializeMdx,
-  mockComputeSaveDates,
   mockParseMdx,
   mockDecryptToken,
   mockBytesFromApi,
@@ -38,7 +37,6 @@ const {
   mockDeletePost: vi.fn(),
   mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
-  mockComputeSaveDates: vi.fn(),
   mockParseMdx: vi.fn(),
   mockDecryptToken: vi.fn(),
   mockBytesFromApi: vi.fn(),
@@ -71,7 +69,6 @@ vi.mock("$lib/fs", () => ({
 
 vi.mock("$lib/parser", () => ({
   serializeMdx: mockSerializeMdx,
-  computeSaveDates: mockComputeSaveDates,
   parseMdx: mockParseMdx,
 }));
 
@@ -122,6 +119,8 @@ function makeConfig(getProjects?: () => TProjectEntry[]) {
     getPrefs: () => ({ syncType: "git" as TSyncType, proxyUrl: "" }),
     getProjects: getProjects ?? (() => []),
     onSyncStatus,
+    // Defaults to "no editor open" — saver-closed push path semantics.
+    isPostEditing: vi.fn().mockReturnValue(false),
   };
 }
 
@@ -174,7 +173,6 @@ describe("Syncer", () => {
     mockDeletePost.mockReset();
     mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
-    mockComputeSaveDates.mockReset();
     mockDecryptToken.mockReset();
     mockBytesFromApi.mockReset();
     mockGetSecret.mockReset();
@@ -194,10 +192,6 @@ describe("Syncer", () => {
     mockSerializeMdx.mockImplementation(
       (post: IPostRecord) => `serialized-${post.id}`,
     );
-    mockComputeSaveDates.mockReturnValue({
-      dateUpdated: "2026-06-08",
-      datePublished: "2026-06-08",
-    });
     mockAdapterCommitAndPush.mockResolvedValue("sha-abc123");
     mockAdapterCheckRemote.mockResolvedValue({ hasChanges: true });
     mockAdapterPull.mockResolvedValue([]);
@@ -249,9 +243,14 @@ describe("Syncer", () => {
       const [pid, id, syncedPost] = hook.mock.calls[0];
       expect(pid).toBe("proj-1");
       expect(id).toBe(post.id);
+      // Hook receives the post as it now lives in IDB post-sync: same content
+      // as the dirty original, but with dirty=0.
       expect(syncedPost).toMatchObject({
         id: post.id,
         projectId: "proj-1",
+        slug: post.slug,
+        title: post.title,
+        body: post.body,
         dirty: 0,
       });
     });
@@ -332,10 +331,16 @@ describe("Syncer", () => {
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
-        state: "synced",
-        errorMsg: "",
-      });
+      // Empty dirty list: syncer writes SYNCED state + dirtyOverride=false
+      // (the empty-dirty early return knows dirty=0).
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        {
+          state: "synced",
+          errorMsg: "",
+        },
+        false,
+      );
       expect(mockSavePost).not.toHaveBeenCalled();
     });
 
@@ -360,26 +365,38 @@ describe("Syncer", () => {
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(post.dirty).toBe(0);
-      expect(mockSavePost).toHaveBeenCalledWith(post);
+      expect(mockSavePost).toHaveBeenCalledTimes(1);
+      expect(mockSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({ id: post.id, dirty: 0 }),
+      );
     });
 
     it("transitions sync status: syncing-push → synced", async () => {
       const post = makeDirtyPost();
-      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockGetDirtyPosts.mockResolvedValueOnce([post]).mockResolvedValueOnce([]);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(config.onSyncStatus).toHaveBeenCalledTimes(2);
-      expect(config.onSyncStatus).toHaveBeenNthCalledWith(1, "proj-1", {
-        state: "syncing-push",
-        errorMsg: "",
-      });
-      expect(config.onSyncStatus).toHaveBeenNthCalledWith(2, "proj-1", {
-        state: "synced",
-        errorMsg: "",
-      });
+      expect(config.onSyncStatus).toHaveBeenNthCalledWith(
+        1,
+        "proj-1",
+        {
+          state: "syncing-push",
+          errorMsg: "",
+        },
+        null,
+      );
+      expect(config.onSyncStatus).toHaveBeenNthCalledWith(
+        2,
+        "proj-1",
+        {
+          state: "synced",
+          errorMsg: "",
+        },
+        null,
+      );
     });
 
     it("sets error status when commit fails", async () => {
@@ -390,10 +407,14 @@ describe("Syncer", () => {
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
-        state: "error",
-        errorMsg: "network error",
-      });
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        {
+          state: "error",
+          errorMsg: "network error",
+        },
+        null,
+      );
     });
 
     it("continues to next post when one fails", async () => {
@@ -408,6 +429,7 @@ describe("Syncer", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(mockAdapterCommitAndPush).toHaveBeenCalledTimes(2);
+      // Only the successful iterate (post2) gets a dbSavePost writeback.
       expect(mockSavePost).toHaveBeenCalledTimes(1);
     });
 
@@ -472,6 +494,76 @@ describe("Syncer", () => {
         expect.stringContaining("btsv-testuser-proj-1-20260608-14302250-save-"),
         "decrypted-token",
       );
+    });
+  });
+
+  describe("saver-aware push", () => {
+    it("skips dbSavePost when isPostEditing reports editor open for the post", async () => {
+      const post = makeDirtyPost();
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      config.isPostEditing.mockReturnValue(true);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Pushed to git but IDB writeback was deferred to the saver.
+      expect(mockAdapterCommitAndPush).toHaveBeenCalledTimes(1);
+      expect(mockSavePost).not.toHaveBeenCalled();
+    });
+
+    it("writes dbSavePost with dirty=0 when saver-closed for the post", async () => {
+      const post = makeDirtyPost();
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      // Default isPostEditing returns false (saver-closed).
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAdapterCommitAndPush).toHaveBeenCalledTimes(1);
+      expect(mockSavePost).toHaveBeenCalledTimes(1);
+      expect(mockSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({ id: post.id, dirty: 0 }),
+      );
+    });
+
+    it("isPostEditing receives projectId + postId for each dirty post", async () => {
+      mockGetDirtyPosts.mockResolvedValue([
+        makeDirtyPost({ id: "post-a" }),
+        makeDirtyPost({ id: "post-b" }),
+      ]);
+      config.isPostEditing.mockReturnValue(false);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(config.isPostEditing).toHaveBeenCalledTimes(2);
+      expect(config.isPostEditing).toHaveBeenNthCalledWith(
+        1,
+        "proj-1",
+        "post-a",
+      );
+      expect(config.isPostEditing).toHaveBeenNthCalledWith(
+        2,
+        "proj-1",
+        "post-b",
+      );
+    });
+
+    it("hook receives syncedPost with new dateUpdated from syncer", async () => {
+      const post = makeDirtyPost({ dateUpdated: "2026-06-01" });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      const hook = vi.fn();
+      syncer.addAfterSyncHook(hook);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(hook).toHaveBeenCalledTimes(1);
+      const syncedPost = hook.mock.calls[0][2];
+      // Syncer mutates post.dateUpdated = today() before serializing for git,
+      // and the hook's syncedPost reflects post-mutation state.
+      expect(syncedPost.dateUpdated).not.toBe("2026-06-01");
+      expect(syncedPost.dirty).toBe(0);
     });
   });
 
@@ -652,10 +744,15 @@ describe("Syncer", () => {
       await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
 
       expect(mockDeletePost).not.toHaveBeenCalled();
-      expect(config.onSyncStatus).toHaveBeenCalledWith("proj-1", {
-        state: SyncState.ERROR,
-        errorMsg: "No git token available",
-      });
+      // #ensureGitToken emits ERROR status itself when no token available.
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        {
+          state: SyncState.ERROR,
+          errorMsg: "No git token available",
+        },
+        null,
+      );
     });
 
     it("deletes IDB row when file does not exist on disk", async () => {
@@ -665,6 +762,12 @@ describe("Syncer", () => {
 
       expect(mockDeletePost).toHaveBeenCalledTimes(1);
       expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
+      // File-not-on-disk path fires SYNCED status after the deletion.
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        { state: SyncState.SYNCED, errorMsg: "" },
+        null,
+      );
     });
 
     it("deletes IDB row and persists sha after successful deletion", async () => {
@@ -690,6 +793,30 @@ describe("Syncer", () => {
           id: "proj-1",
           storedRemoteSha: "sha-delete",
         }),
+      );
+      // Full deletion path fires SYNCED after dbDeletePost.
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        { state: SyncState.SYNCED, errorMsg: "" },
+        null,
+      );
+    });
+
+    it("recompute flags project dirty when other dirty posts remain after a deletion", async () => {
+      mockPostFileExists.mockResolvedValue(false);
+      // After deleting the requested post, one other dirty post remains.
+      mockGetDirtyPosts.mockResolvedValue([
+        makeDirtyPost({ id: "other-post", dirty: 1 }),
+      ]);
+
+      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+
+      expect(mockDeletePost).toHaveBeenCalledTimes(1);
+      // The !existsOnDisk path fires SYNCED.
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        { state: SyncState.SYNCED, errorMsg: "" },
+        null,
       );
     });
   });

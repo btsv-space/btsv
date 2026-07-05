@@ -1,4 +1,5 @@
 import type { BtsvPostFrontmatter } from "$lib/contract/frontmatter";
+import type { DebouncedSaver } from "$lib/saver";
 
 // ── Enums ──────────────────────────────────────────
 
@@ -47,6 +48,7 @@ export interface IProject {
 export interface ISyncStatus {
   state: SyncState;
   errorMsg: string;
+  dirty: boolean;
 }
 
 export interface IUserPreferences {
@@ -164,16 +166,26 @@ export interface IDebouncedSaverConfig {
   projectId: string;
   getWorkingPost: () => IPostRecord | null;
   getTagsInput: () => string;
-  initialPost: IPostRecord | null;
   gitBaseline?: IPostRecord | null;
   onSave: (post: IPostRecord) => void;
   onError: (error: string) => void;
 }
 
+export interface ICurrentSaver {
+  projectId: string;
+  postId: string;
+  saver: DebouncedSaver;
+}
+
 export interface ISyncerConfig {
   getPrefs: () => IUserPreferences;
   getProjects: () => TProjectEntry[];
-  onSyncStatus?: (projectId: string, status: ISyncStatus) => void;
+  isPostEditing?(projectId: string, postId: string): boolean;
+  onSyncStatus?(
+    projectId: string,
+    status: Omit<ISyncStatus, "dirty">,
+    dirtyOverride: boolean | null,
+  ): void;
 }
 
 export interface ILoadPostsOpts {
@@ -205,6 +217,8 @@ type TMetadataKey =
   | "dateUpdated";
 
 export type TContentKey = Exclude<keyof IPostRecord, TMetadataKey>;
+
+export type IPostContent = Omit<IPostRecord, TMetadataKey>;
 
 export type TProjectEntry = IProject & {
   status: "unknown" | "ready" | "cloning" | "error";
