@@ -1,9 +1,6 @@
 import { DebouncedSaver } from "$lib/saver";
 import type { ICurrentSaver, IDebouncedSaverConfig } from "$lib/shared/types";
 
-// let currentSaver: DebouncedSaver | null = null;
-// let currentIds: {projectId: string, postId: string} | null = null;
-
 let currentSaver: ICurrentSaver | null;
 
 export function createCurrentSaver(
