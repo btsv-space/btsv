@@ -5,10 +5,10 @@ import {
   dbGetPost,
   dbSaveProject,
 } from "$lib/db";
-import { serializeMdx, computeSaveDates, parseMdx } from "$lib/parser";
+import { serializeMdx, parseMdx } from "$lib/parser";
 import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
-import { commitTimestamp } from "$lib/shared/utils";
+import { commitTimestamp, today } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
 import { postFileExists, deletePostFile } from "$lib/fs";
 import {
@@ -38,11 +38,20 @@ export class Syncer {
     this.config = config;
   }
 
-  #setStatus(projectId: string, state: SyncState, errorMsg = ""): void {
-    this.config.onSyncStatus?.(projectId, {
-      state,
-      errorMsg: state === SyncState.ERROR ? errorMsg : "",
-    });
+  #setStatus(
+    projectId: string,
+    state: SyncState,
+    errorMsg = "",
+    dirtyOverride: boolean | null = null,
+  ): void {
+    this.config.onSyncStatus?.(
+      projectId,
+      {
+        state,
+        errorMsg: state === SyncState.ERROR ? errorMsg : "",
+      },
+      dirtyOverride,
+    );
   }
 
   async #ensureGitToken(projectId: string): Promise<string | null> {
@@ -217,7 +226,8 @@ export class Syncer {
       async () => {
         const dirty = await dbGetDirtyPosts(project.id);
         if (dirty.length === 0) {
-          this.#setStatus(project.id, SyncState.SYNCED);
+          // we just got dirty from db, can override dirty status
+          this.#setStatus(project.id, SyncState.SYNCED, "", false);
           return true;
         }
 
@@ -239,9 +249,8 @@ export class Syncer {
             }
             lastToken = token;
 
-            const dates = computeSaveDates(post);
-            post.dateUpdated = dates.dateUpdated;
-            post.datePublished = dates.datePublished;
+            const dateUpdated = today();
+            post.dateUpdated = dateUpdated;
 
             const mdxContent = serializeMdx(post);
 
@@ -256,14 +265,27 @@ export class Syncer {
               token,
             );
 
-            post.dirty = 0;
             if (commitSha) pushedSha = commitSha;
 
             if (!post.draft) anyPublished = true;
 
-            await dbSavePost(post);
+            const syncedPost: IPostRecord = { ...post, dirty: 0 };
 
-            this.#runAfterSyncHooks(project.id, post.id, post, Date.now());
+            // when editor is open for this post, skip save to db
+            const isEditing =
+              this.config.isPostEditing?.(project.id, post.id) ?? false;
+            if (!isEditing) {
+              await dbSavePost(syncedPost);
+            }
+
+            // TODO: check if there are any dirty/remaining hooks
+            // that will mess up with dirty state
+            this.#runAfterSyncHooks(
+              project.id,
+              post.id,
+              syncedPost,
+              Date.now(),
+            );
           } catch (err) {
             console.error(`[syncer] sync failed for ${post.id}:`, err);
             this.#setStatus(
@@ -311,6 +333,7 @@ export class Syncer {
         const existsOnDisk = await postFileExists(project.id, postId);
         if (!existsOnDisk) {
           await dbDeletePost(project.id, postId);
+          this.#setStatus(project.id, SyncState.SYNCED);
           this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
           return;
         }
@@ -338,6 +361,8 @@ export class Syncer {
           project.storedRemoteSha = commitSha;
           await dbSaveProject(project);
         }
+
+        this.#setStatus(project.id, SyncState.SYNCED);
 
         this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
 
@@ -413,6 +438,14 @@ export class Syncer {
         }
         if (!content) continue;
 
+        // TODO: will be changed as part of conflict mgmt in sync refactor
+        // Guard: never overwrite a locally-dirty post with stale remote data.
+        const localPost = await dbGetPost(projectId, id);
+        if (localPost?.dirty) {
+          postRecords.push(localPost);
+          continue;
+        }
+
         const parsed = parseMdx(content, id);
         const post: IPostRecord = {
           projectId,
@@ -420,14 +453,6 @@ export class Syncer {
           dirty: 0,
           extra: { ...parsed.extra },
         };
-
-        // TODO: will be changed as part of conflict mgmt in sync refactor
-        // Guard: never overwrite a locally-dirty post with stale remote data
-        const localPost = await dbGetPost(projectId, post.id);
-        if (localPost?.dirty) {
-          postRecords.push(localPost);
-          continue;
-        }
 
         await dbSavePost(post);
         postRecords.push(post);

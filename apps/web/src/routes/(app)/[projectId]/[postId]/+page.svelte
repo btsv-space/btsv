@@ -8,7 +8,12 @@
   import { readPostContent } from "$lib/fs";
   import { parseMdx } from "$lib/parser";
   import { DebouncedSaver } from "$lib/saver";
-  import type { IPostRecord } from "$lib/shared/types";
+  import { syncStatus } from "$lib/stores/syncStatus.svelte";
+  import {
+    createCurrentSaver,
+    destroyCurrentSaver,
+  } from "$lib/stores/currentSaver";
+  import { type IPostRecord } from "$lib/shared/types";
   import { today } from "$lib/shared/utils";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
@@ -141,27 +146,25 @@
     try {
       const raw = await readPostContent(projectId, postId);
       const parsed = parseMdx(raw, postId);
-      gitBaseline = {
-        ...workingPost,
-        ...parsed,
-        dirty: 0,
-      };
+      gitBaseline = { ...workingPost, ...parsed };
     } catch {
       // New post — not yet in git
     }
 
-    saver = new DebouncedSaver({
+    saver = createCurrentSaver({
       projectId,
       gitBaseline,
       getWorkingPost: () => workingPost,
       getTagsInput: () => tagsInput,
-      initialPost: workingPost,
       onSave: (saved) => {
         const idx = posts.value.findIndex(
           (p) => p.id === saved.id && p.projectId === saved.projectId,
         );
         if (idx >= 0) {
           posts.value[idx] = { ...saved };
+          // if the post is updated,
+          // re-evaluate project dirty flag
+          syncStatus.updateDirty(projectId);
         }
       },
       onError: (err) => {
@@ -173,7 +176,6 @@
     unregisterHook = syncer.addAfterSyncHook((pid, id, syncedPost) => {
       if (pid === projectId && id === postId && syncedPost) {
         saver?.updateBaseline(syncedPost);
-        tagsInput = syncedPost.tags.join(", ");
       }
     });
   });
@@ -183,6 +185,7 @@
     saver?.flush().then(() => {
       const project = getProject(projectId);
       if (project) syncer.push(project);
+      destroyCurrentSaver();
     });
   });
 

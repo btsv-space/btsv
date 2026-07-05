@@ -7,18 +7,28 @@ import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
 import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
 import { setProjectCommitTime } from "$lib/stores/recentProject";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
+import { getCurrentSaver } from "$lib/stores/currentSaver";
 
 export const syncer = new Syncer({
   getPrefs: () => prefs.value,
   getProjects: () => projects.value,
-  onSyncStatus: (pid, status) => {
-    syncStatus.set(pid, status);
+  isPostEditing: (projectId, postId) => {
+    const currentSaver = getCurrentSaver();
+    return (
+      currentSaver?.projectId === projectId && currentSaver?.postId === postId
+    );
+  },
+  onSyncStatus: (projectId, status, dirtyOverride) => {
+    syncStatus.setStateAndMsg(projectId, status);
+    syncStatus.updateDirty(projectId, dirtyOverride);
   },
 });
 
-syncer.addAfterSyncHook((projectId, _postId, syncedPost, lastCommitTime) => {
-  if (projectId != null && syncedPost != null) {
-    const idx = posts.value.findIndex((p) => p.id === syncedPost.id);
+syncer.addAfterSyncHook((projectId, postId, syncedPost, lastCommitTime) => {
+  if (projectId != null && postId != null && syncedPost != null) {
+    const idx = posts.value.findIndex(
+      (p) => p.id === postId && p.projectId === projectId,
+    );
     if (idx >= 0) {
       posts.value[idx] = syncedPost;
     }
@@ -66,7 +76,7 @@ export async function loadPosts(
   const syncTypeChanged =
     project.syncType !== undefined && project.syncType !== prefs.value.syncType;
   const shouldPull = forcePull || syncTypeChanged;
-console.log(
+  console.log(
     `[loadPosts] ${projectId}: page=${page} cached=${posts.value.length} shouldPull=${shouldPull}`,
   );
 

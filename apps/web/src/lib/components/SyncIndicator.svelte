@@ -1,6 +1,5 @@
 <script lang="ts">
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
-  import { posts } from "$lib/stores/posts.svelte";
   import { SyncState } from "$lib/shared/types";
   import { onMount } from "svelte";
   import { Save } from "@lucide/svelte";
@@ -27,10 +26,6 @@
     };
   });
 
-  const hasDirty = $derived(
-    posts.value.some((p) => p.projectId === projectId && p.dirty),
-  );
-
   const status = $derived(syncStatus.get(projectId));
 
   const effectiveState = $derived(
@@ -42,7 +37,7 @@
           ? SyncState.SYNCING_PULL
           : status?.state === SyncState.CONFLICT
             ? SyncState.CONFLICT
-            : hasDirty
+            : status?.dirty
               ? SyncState.DIRTY
               : status?.state === SyncState.ERROR
                 ? SyncState.ERROR

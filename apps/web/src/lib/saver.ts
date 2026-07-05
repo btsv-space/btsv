@@ -5,7 +5,7 @@ import {
   type IPostRecord,
   type IDebouncedSaverConfig,
 } from "$lib/shared/types";
-import { dbGetPost, dbGetDirtyPosts, dbSavePost } from "$lib/db";
+import { dbSavePost } from "$lib/db";
 
 export function normalizePost(
   workingPost: IPostRecord,
@@ -54,16 +54,9 @@ export class DebouncedSaver {
       : null;
   }
 
-  async #write(saved: IPostRecord, signal: AbortSignal) {
-    await dbSavePost(saved);
-    if (signal.aborted) return;
-    this.config.onSave(saved);
-    // TODO: look into this dirty posts change
-    const remaining = await dbGetDirtyPosts(saved.projectId);
-    this.config.onDirtyChange?.(saved.projectId, remaining.length > 0);
-  }
-
   async #doSave(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) return;
+
     const workingPost = this.config.getWorkingPost();
     const tagsInput = this.config.getTagsInput();
     if (!workingPost) return;
@@ -71,27 +64,18 @@ export class DebouncedSaver {
     const normalized = normalizePost(workingPost, tagsInput);
 
     try {
-      const dbPost = await dbGetPost(workingPost.projectId, workingPost.id);
-      if (signal.aborted) return;
-
-      // No change since last IDB write → skip persist,
-      // unless the post was dirty and now matches git (e.g. after a successful push/pull)
-      if (dbPost && contentEqual(normalized, dbPost)) {
-        if (
-          this.syncBaseline &&
-          dbPost.dirty &&
-          contentEqual(normalized, this.syncBaseline)
-        ) {
-          await this.#write({ ...normalized, dirty: 0 }, signal);
-        }
-        return;
-      }
-
-      // Content changed: dirty = true, unless it matches what git has
       const needsPush = this.syncBaseline
         ? !contentEqual(normalized, this.syncBaseline)
         : true;
-      await this.#write({ ...normalized, dirty: needsPush ? 1 : 0 }, signal);
+      const postSaved: IPostRecord = {
+        ...normalized,
+        dirty: needsPush ? 1 : 0,
+      };
+      await dbSavePost(postSaved);
+
+      if (signal.aborted) return;
+
+      this.config.onSave(postSaved);
     } catch (err) {
       this.config.onError(err instanceof Error ? err.message : "Save failed");
     }
