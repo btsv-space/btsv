@@ -489,7 +489,7 @@ export class Syncer {
       this.#syncAllDirty()
         .catch(() => {})
         .finally(() => this.#schedule());
-    }, 10_000);
+    }, 60_000);
   }
 
   #clearTimer() {
