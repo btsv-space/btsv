@@ -2,7 +2,6 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { untrack, onMount, onDestroy } from "svelte";
-  import { posts } from "$lib/stores/posts.svelte";
   import { syncer, loadPost } from "$lib/stores/syncer.svelte";
   import { getProject } from "$lib/stores/projects.svelte";
   import { readPostContent } from "$lib/fs";
@@ -43,12 +42,6 @@
       return;
     }
     await syncer.commitDeletion(project, id);
-    const idx = posts.value.findIndex(
-      (p) => p.id === id && p.projectId === pid,
-    );
-    if (idx >= 0) {
-      posts.value.splice(idx, 1);
-    }
   }
 
   let workingPost = $state<IPostRecord | null>(null);
@@ -161,16 +154,8 @@
       gitBaseline,
       getWorkingPost: () => workingPost,
       getTagsInput: () => tagsInput,
-      onSave: (saved) => {
-        const idx = posts.value.findIndex(
-          (p) => p.id === saved.id && p.projectId === saved.projectId,
-        );
-        if (idx >= 0) {
-          posts.value[idx] = { ...saved };
-          // if the post is updated,
-          // re-evaluate project dirty flag
-          syncStatus.updateDirty(projectId);
-        }
+      onSave: () => {
+        syncStatus.updateDirty(projectId);
       },
       onError: (err) => {
         console.error("[editor] save failed:", err);

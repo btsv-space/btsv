@@ -33,7 +33,9 @@ function fakePost(overrides: Partial<IPostRecord> = {}): IPostRecord {
   return { ...defaults, ...overrides } as IPostRecord;
 }
 
-function makeConfig(overrides: Partial<IDebouncedSaverConfig> = {}): IDebouncedSaverConfig {
+function makeConfig(
+  overrides: Partial<IDebouncedSaverConfig> = {},
+): IDebouncedSaverConfig {
   return {
     projectId: "proj-1",
     getWorkingPost: () => fakePost(),
