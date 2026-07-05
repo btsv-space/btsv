@@ -6,7 +6,7 @@ import type {
 } from "$lib/shared/types";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -55,6 +55,11 @@ function getDB(): Promise<IDBPDatabase> {
             store.createIndex("by_project_dirty", ["projectId", "dirty"], {
               unique: false,
             });
+          }
+        }
+        if (oldVersion < 6) {
+          if (db.objectStoreNames.contains("documents")) {
+            db.deleteObjectStore("documents");
           }
         }
       },
