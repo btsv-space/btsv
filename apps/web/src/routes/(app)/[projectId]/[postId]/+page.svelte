@@ -19,6 +19,7 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
+  import { dbGetPost } from "$lib/db";
 
   const projectId = page.params.projectId!;
   const postId = page.params.postId!;
@@ -50,11 +51,8 @@
     }
   }
 
-  // initialize so there's no blink
-  let workingPost = $state(posts.value.find((p) => p.id === postId) || null);
-  let tagsInput = $state(
-    tagsArrToString(posts.value.find((p) => p.id === postId)?.tags),
-  );
+  let workingPost = $state<IPostRecord | null>(null);
+  let tagsInput = $state("");
   let saveError = $state<{ title: string; message: string } | null>(null);
   let showDeleteConfirm = $state(false);
   let isWriteMode = $state(true);
@@ -133,6 +131,13 @@
   }
 
   onMount(async () => {
+    // load cached post first
+    const cachedPost = (await dbGetPost(projectId, postId)) || null;
+    if (cachedPost) {
+      workingPost = cachedPost;
+      tagsInput = tagsArrToString(cachedPost.tags);
+    }
+    // pull from origin and load it
     const freshPost = await loadPost(projectId, postId, { forcePull: true });
     if (!freshPost) {
       goto(`/${projectId}`);
