@@ -1,7 +1,7 @@
 import { DebouncedSaver } from "$lib/saver";
 import type { ICurrentSaver, IDebouncedSaverConfig } from "$lib/shared/types";
 
-let currentSaver: ICurrentSaver | null;
+let currentSaver: ICurrentSaver | null = null;
 
 export function createCurrentSaver(
   config: IDebouncedSaverConfig,
