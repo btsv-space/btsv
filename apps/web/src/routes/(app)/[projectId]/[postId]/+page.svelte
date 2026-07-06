@@ -114,6 +114,9 @@
     saver?.cancel();
     try {
       await deletePost(projectId, postId);
+      // on delete, null the saver so that typical destroy lifecycle does not run
+      saver = null;
+      destroyCurrentSaver();
       goto(`/${projectId}`);
     } catch (err) {
       saveError = {
