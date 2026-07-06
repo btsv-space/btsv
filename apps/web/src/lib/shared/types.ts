@@ -253,4 +253,5 @@ export const CONTENT_KEYS = {
   draft: true,
   body: true,
   extra: true,
+  deleted: true,
 } as const satisfies { [K in TContentKey]: true };
