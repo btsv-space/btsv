@@ -106,7 +106,7 @@
     projectEntry.status = "cloning";
     projectEntry.error = "";
     try {
-      await loadPage({ forcePull: true, page: currentPage });
+      await loadPage({ pullOption: "always", page: currentPage });
       projectEntry.status = "ready";
     } catch (err) {
       projectEntry.status = "error";
