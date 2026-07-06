@@ -8,21 +8,28 @@ to Netlify or Cloudflare.
 
 ```
 ┌──────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   apps/web   │────▶│   apps/api  │     │  Git repo   │────▶│  Netlify /  │
-│  (SvelteKit) │     │    (Go)     │     │ (content +  │     │ Cloudflare  │
-│   Editor SPA │     │  Auth +     │     │  Astro SSG) │     │             │
-│              │◀────│  secrets    │     │             │     │             │
+│   apps/web   │────▶│  apps/proxy │────▶│   apps/api  │     │  Git repo   │
+│  (SvelteKit) │     │   (Go CORS  │     │    (Go)     │     │ (content +  │
+│   Editor SPA │     │    proxy)   │     │  Auth +     │     │  Astro SSG) │
+│              │◀────│             │◀────│  secrets    │     │             │
 └──────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-     local-first           │                    ▲                    ▲
-     IndexedDB +           │                    │                    │
-     isomorphic-git ─ ─ ─ ─┘  git push with     │                    │
-                               server-stored PAT │                    │
+     local-first               ▲               │                    ▲
+     IndexedDB +               │               │                    │
+     isomorphic-git ─ ─ ─ ─ ─ ─│─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
+                                │                stored PAT
+                                │
+                          ┌─────┴──────────┐
+
+
+                          └────────────────┘
 ```
 
 | Layer | Component | Description |
-|---|---|---|
+|---|---|---|---|
 | **Frontend** | `apps/web` | SvelteKit 5, adapter-static SPA, Svelte 5 runes, local-first PWA |
 | **Backend** | `apps/api` | Go + chi, SQLite, username/password auth, encrypted token storage |
+| **Proxy** | `apps/proxy` | Go CORS proxy for Git remote API calls |
+
 | **Storage** | Git repos | Content repos per user/project; isomorphic-git pushes from the browser |
 | **Publish** | `builder-templates/` | SSG templates (submodules) — users fork and connect to a provider |
 
@@ -138,7 +145,7 @@ The four services are dockerized for production deployment:
 echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.production
 
 
-docker compose --env-file .env.production up --build
+docker compose --env-file .env.production up --build -d
 ```
 
 The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
@@ -160,8 +167,6 @@ when `main` is updated.
 
 
 
-   | Field | Value |
-   |---|---|
     | Field | Value |
     |---|---|
 
@@ -189,7 +194,7 @@ builds instead of Docker.
 |---|---|---|
 | `VITE_API_URL` | web build arg | API base URL baked into the SPA bundle |
 | `VITE_PROXY_URL` | web build arg | Git CORS proxy URL baked into the SPA bundle |
-
+    | `ALLOW_ORIGIN` | api, proxy env vars | CORS origin header (the web app's domain) |
 | `PORT` | api & proxy env vars | Internal listen port |
 | `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
@@ -307,7 +312,9 @@ The API base URL defaults to `http://localhost:8080/api` and can be overridden w
 btsv/
 ├── apps/
 │   ├── web/                              SvelteKit 5 SPA (adapter-static)
-│   └── api/                              Go + chi REST server
+│   ├── api/                              Go + chi REST server
+│   ├── proxy/                            Go CORS proxy (GitHub / GitLab)
+
 ├── builder-templates/
 │   └── btsv-template-astro/              Astro blog template (git submodule)
 ├── contract/
