@@ -7,7 +7,7 @@
 
   function handleReload() {
     dismissed = false;
-    updateServiceWorker();
+    updateServiceWorker(true);
   }
 
   function handleDismiss() {

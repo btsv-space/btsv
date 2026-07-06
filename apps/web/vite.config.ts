@@ -50,12 +50,18 @@ export default defineConfig({
           },
         ],
       },
+      kit: {
+        spa: true,
+        adapterFallback: "index.html",
+      },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        additionalManifestEntries: [{ url: "/index.html", revision: null }],
-        navigateFallback: "/index.html",
+        globPatterns: [
+          "client/**/*.{js,css,ico,png,svg,woff2,webmanifest}",
+          "prerendered/**/*.{html,json}",
+        ],
         navigateFallbackDenylist: [/^\/api\//],
         clientsClaim: true,
+        cleanupOutdatedCaches: true,
       },
     }),
   ],
