@@ -6,7 +6,7 @@ services:
         VITE_API_URL: https://api.btsv.space/api
         VITE_PROXY_URL: https://proxy.btsv.space
     ports:
-      - "8100:80"
+      - "8103:80"
     depends_on:
       - api
       - proxy
@@ -33,6 +33,21 @@ services:
       PORT: "8102"
       ALLOW_ORIGIN: https://app.btsv.space
       LOG_LEVEL: info
+
+
+    build:
+
+    ports:
+      - "8104:8104"
+    environment:
+      PORT: "8104"
+
+      REPO_DIR: /repo
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/repo
+      - ${HOME}/.ssh:/root/.ssh:ro
+    restart: unless-stopped
 
 volumes:
   api-data:

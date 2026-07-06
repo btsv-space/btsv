@@ -118,13 +118,14 @@ make lint
 
 ## Deployment (Docker)
 
-The three services are dockerized for production deployment:
+The four services are dockerized for production deployment:
 
 | Service | Image | Port | Domain |
 |---|---|---|---|
 | **Web** | nginx (static SPA) | `8100` | `app.btsv.space` |
 | **API** | Go binary on alpine | `8101` | `api.btsv.space` |
 | **Proxy** | Go binary on alpine | `8102` | `proxy.btsv.space` |
+
 
 ### Prerequisites
 
@@ -133,8 +134,9 @@ The three services are dockerized for production deployment:
 ### Build & run
 
 ```sh
-# Set the API encryption key (32 bytes, hex-encoded)
+# Set required secrets
 export ENCRYPTION_KEY=$(openssl rand -hex 32)
+
 
 docker compose up --build
 ```
@@ -142,6 +144,31 @@ docker compose up --build
 The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
 unset it's auto-generated on first startup — but a fixed value is needed to
 keep existing tokens decryptable across restarts.
+
+
+
+
+
+
+
+when `main` is updated.
+
+**Setup:**
+
+
+   mounts `~/.ssh` for `git fetch` auth).
+
+
+
+   | Field | Value |
+   |---|---|
+
+   | Content type | `application/json` |
+
+   | Events | Just the push event |
+
+
+   pull the latest code and restart all services.
 
 ### Environment
 
@@ -154,10 +181,11 @@ builds instead of Docker.
 |---|---|---|
 | `VITE_API_URL` | web build arg | API base URL baked into the SPA bundle |
 | `VITE_PROXY_URL` | web build arg | Git CORS proxy URL baked into the SPA bundle |
-| `ALLOW_ORIGIN` | api & proxy env vars | CORS origin header (the web app's domain) |
+
 | `PORT` | api & proxy env vars | Internal listen port |
 | `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
+
 
 ## Submodules
 
