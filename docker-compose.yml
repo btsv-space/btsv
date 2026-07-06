@@ -1,0 +1,38 @@
+services:
+  web:
+    build:
+      context: ./apps/web
+      args:
+        VITE_API_URL: https://api.btsv.space/api
+        VITE_PROXY_URL: https://proxy.btsv.space
+    ports:
+      - "8100:80"
+    depends_on:
+      - api
+      - proxy
+
+  api:
+    build:
+      context: ./apps/api
+    ports:
+      - "8101:8101"
+    environment:
+      PORT: "8101"
+      DATA_DIR: /data
+      ALLOW_ORIGIN: https://app.btsv.space
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    volumes:
+      - api-data:/data
+
+  proxy:
+    build:
+      context: ./apps/proxy
+    ports:
+      - "8102:8102"
+    environment:
+      PORT: "8102"
+      ALLOW_ORIGIN: https://app.btsv.space
+      LOG_LEVEL: info
+
+volumes:
+  api-data:
