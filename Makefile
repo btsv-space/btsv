@@ -86,7 +86,9 @@ build-proxy:
 
 start:
 	@echo "Starting proxy + api + web (production)..."
-	@set -a; [ -f .env.production ] && . .env.production; set +a; \
+	@set -a; [ -f .env.production ] && . .env.production; \
+	$(MAKE) build && \
+	set +a; \
 	trap 'kill 0' EXIT; \
 	$(MAKE) start-proxy & \
 	$(MAKE) start-api & \
@@ -115,8 +117,8 @@ start-host:
 	HTTPS_KEY="$(CURDIR)/.certs/dev-key.pem"; \
 	TLS_CERT_FILE="$(CURDIR)/.certs/dev.pem"; \
 	TLS_KEY_FILE="$(CURDIR)/.certs/dev-key.pem"; \
+	$(MAKE) build && \
 	set +a; \
-	(cd apps/web && pnpm build) && \
 	trap 'kill 0' EXIT; \
 	cd apps/web && pnpm preview --host & \
 	cd apps/api && ./bin/server & \
