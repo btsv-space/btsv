@@ -134,11 +134,11 @@ The four services are dockerized for production deployment:
 ### Build & run
 
 ```sh
-# Set required secrets
-export ENCRYPTION_KEY=$(openssl rand -hex 32)
+# Generate secrets and add them to .env.production
+echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.production
 
 
-docker compose up --build
+docker compose --env-file .env.production up --build
 ```
 
 The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
