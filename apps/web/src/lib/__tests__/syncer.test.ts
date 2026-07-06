@@ -567,6 +567,63 @@ describe("Syncer", () => {
     });
   });
 
+  describe("push deletion branch", () => {
+    it("calls commitDeletion instead of commitAndPush for deleted posts", async () => {
+      const post = makeDirtyPost({ deleted: true });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAdapterCommitAndPush).not.toHaveBeenCalled();
+      expect(mockAdapterCommitDeletion).toHaveBeenCalledWith(
+        "proj-1",
+        post.id,
+        expect.stringContaining("-delete-"),
+        "decrypted-token",
+      );
+    });
+
+    it("deletes from IDB after successful deletion push", async () => {
+      const post = makeDirtyPost({ deleted: true });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockAdapterCommitDeletion.mockResolvedValue("sha-deleted");
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", post.id);
+      expect(mockSavePost).not.toHaveBeenCalled();
+    });
+
+    it("keeps IDB entry when deletion push fails", async () => {
+      const post = makeDirtyPost({ deleted: true });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockAdapterCommitDeletion.mockRejectedValue(new Error("push failed"));
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockDeletePost).not.toHaveBeenCalled();
+      expect(mockSavePost).not.toHaveBeenCalled();
+    });
+
+    it("calls mergeToMain after deleting a published post", async () => {
+      const post = makeDirtyPost({ deleted: true, draft: false });
+      mockGetDirtyPosts.mockResolvedValue([post]);
+      mockAdapterCommitDeletion.mockResolvedValue("sha-deleted");
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Deletion commit was pushed to staging; merge staging→main includes it.
+      expect(mockAdapterMergeToMain).toHaveBeenCalledWith(
+        "proj-1",
+        "decrypted-token",
+      );
+    });
+  });
+
   describe("pull coalescing", () => {
     it("coalesces concurrent pull calls for the same project", async () => {
       let pullResolve: (value: { hasChanges: boolean }) => void;
@@ -737,13 +794,24 @@ describe("Syncer", () => {
   });
 
   describe("commitDeletion", () => {
-    it("does not delete IDB row when no git token and file exists on disk", async () => {
+    it("saves as pending deletion when no git token and file exists on disk", async () => {
       mockEnsureGitToken.mockResolvedValue(null);
       mockPostFileExists.mockResolvedValue(true);
+      mockGetPost.mockResolvedValue(makeDirtyPost({ id: "post-1" }));
 
       await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
 
+      // OPFS file is deleted regardless
+      expect(mockDeletePostFile).toHaveBeenCalledWith("proj-1", "post-1");
+      // No token — saved as pending deletion for the push loop to handle
       expect(mockDeletePost).not.toHaveBeenCalled();
+      expect(mockSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "post-1",
+          dirty: 1,
+          deleted: true,
+        }),
+      );
       // #ensureGitToken emits ERROR status itself when no token available.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
@@ -770,7 +838,7 @@ describe("Syncer", () => {
       );
     });
 
-    it("deletes IDB row and persists sha after successful deletion", async () => {
+    it("saves as pending deletion with deleted:true and persists sha after successful commit", async () => {
       mockPostFileExists.mockResolvedValue(true);
       mockAdapterCommitDeletion.mockResolvedValue("sha-delete");
       mockGetPost.mockResolvedValue(
@@ -786,15 +854,22 @@ describe("Syncer", () => {
         expect.stringMatching(/-delete-/),
         "decrypted-token",
       );
-      expect(mockDeletePost).toHaveBeenCalledTimes(1);
-      expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
+      // Post is saved as pending deletion, not deleted outright
+      expect(mockDeletePost).not.toHaveBeenCalled();
+      expect(mockSavePost).toHaveBeenCalledTimes(1);
+      expect(mockSavePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "post-1",
+          dirty: 1,
+          deleted: true,
+        }),
+      );
       expect(mockSaveProject).toHaveBeenCalledWith(
         expect.objectContaining({
           id: "proj-1",
           storedRemoteSha: "sha-delete",
         }),
       );
-      // Full deletion path fires SYNCED after dbDeletePost.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
         { state: SyncState.SYNCED, errorMsg: "" },

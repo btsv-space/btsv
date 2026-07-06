@@ -189,7 +189,7 @@
         </p>
       {/if}
     {:else}
-      {#each posts as post (post.id)}
+      {#each posts.filter((p) => !p.deleted) as post (post.id)}
         <div
           class="card cursor-pointer hover:border-muted-foreground/50 relative overflow-hidden"
           role="button"

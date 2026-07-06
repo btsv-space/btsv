@@ -437,7 +437,7 @@ describe("commitDeletion", () => {
     });
   });
 
-  it("returns null when file is absent", async () => {
+  it("returns HEAD sha when absent but pushes pending commits", async () => {
     mockStatus.mockResolvedValue("absent");
 
     const adapter = new GitAdapter("https://github.com/user/repo.git");
@@ -448,10 +448,13 @@ describe("commitDeletion", () => {
       "token-abc",
     );
 
-    expect(sha).toBeNull();
+    expect(sha).toBe("abc123def456");
     expect(mockRemove).not.toHaveBeenCalled();
     expect(mockCommit).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockResolveRef).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: PROJECT_DIR, ref: "staging" }),
+    );
   });
 
   it("falls back to force push on rejection", async () => {

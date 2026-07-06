@@ -8,7 +8,6 @@ import {
   getDir,
   getPostPath,
   ensureDirChain,
-  readPostContent,
   writePostFile,
   deletePostFile,
 } from "$lib/fs";
@@ -322,8 +321,6 @@ export class GitAdapter implements ISyncAdapter {
     const dir = getDir(projectId);
     const filepath = getPostPath(postId);
 
-    const headBefore = await git.resolveRef({ fs, dir, ref: "HEAD" }).catch(() => null);
-
     await writePostFile(projectId, postId, content);
 
     const fileStatus = await git.status({ fs, dir, filepath });
@@ -359,10 +356,7 @@ export class GitAdapter implements ISyncAdapter {
           force: true,
         });
       } catch (err) {
-        if (headBefore) {
-          await git.writeRef({ fs, dir, ref: "HEAD", value: headBefore, force: true });
-        }
-        await git.resetIndex({ fs, dir, filepath, ref: "HEAD" });
+        console.warn("[git] force push failed, keeping local commit:", err);
         throw err;
       }
     }
@@ -383,12 +377,26 @@ export class GitAdapter implements ISyncAdapter {
     const dir = getDir(projectId);
     const filepath = getPostPath(postId);
 
-    const headBefore = await git.resolveRef({ fs, dir, ref: "HEAD" }).catch(() => null);
-
     await deletePostFile(projectId, postId);
 
     const fileStatus = await git.status({ fs, dir, filepath });
-    if (fileStatus === "absent") return null;
+    if (fileStatus === "absent") {
+      // File already deleted from git HEAD (e.g., by a prior failed push attempt).
+      // Try to push any pending local commits to flush the deletion to remote.
+      try {
+        await git.push({
+          fs,
+          http,
+          dir,
+          corsProxy: this.proxyUrl,
+          onAuth: createCredentials(gitToken),
+          remoteRef: this.gitBranch,
+        });
+      } catch {
+        throw new Error("push of pending deletion commit failed");
+      }
+      return await git.resolveRef({ fs, dir, ref: this.gitBranch });
+    }
 
     await git.remove({ fs, dir, filepath });
     const sha = await git.commit({
@@ -420,10 +428,7 @@ export class GitAdapter implements ISyncAdapter {
           force: true,
         });
       } catch (err) {
-        if (headBefore) {
-          await git.writeRef({ fs, dir, ref: "HEAD", value: headBefore, force: true });
-        }
-        await git.resetIndex({ fs, dir, filepath, ref: "HEAD" });
+        console.warn("[git] deletion push failed, keeping local commit:", err);
         throw err;
       }
     }

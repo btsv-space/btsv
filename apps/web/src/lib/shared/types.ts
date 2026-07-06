@@ -146,6 +146,7 @@ export interface IPostRecord extends BtsvPostFrontmatter {
   body: string;
   extra: Record<string, unknown>;
   dirty: 0 | 1;
+  deleted?: boolean;
 }
 
 export interface IGitState {

@@ -241,57 +241,103 @@ export class Syncer {
         let pushedSha: string | null = null;
 
         for (const post of dirty) {
-          try {
-            const token = await this.#ensureGitToken(project.id);
-            if (!token) {
+          // TODO: refactor if-else deleted blocks, a lot of code reuse
+          if (post.deleted) {
+            try {
+              const token = await this.#ensureGitToken(project.id);
+              if (!token) {
+                allOk = false;
+                continue;
+              }
+              lastToken = token;
+
+              if (!post.draft) anyPublished = true;
+
+              const ts = commitTimestamp();
+              const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-delete-${ts}`;
+
+              const commitSha = await adapter.commitDeletion(
+                project.id,
+                post.id,
+                message,
+                token,
+              );
+
+              if (commitSha) pushedSha = commitSha;
+
+              await dbDeletePost(project.id, post.id);
+
+              this.#runAfterSyncHooks(
+                project.id,
+                post.id,
+                undefined,
+                Date.now(),
+              );
+            } catch (err) {
+              console.error(
+                `[syncer] deletion sync failed for ${post.id}:`,
+                err,
+              );
+              this.#setStatus(
+                project.id,
+                SyncState.ERROR,
+                err instanceof Error ? err.message : "Deletion sync failed",
+              );
               allOk = false;
-              continue;
             }
-            lastToken = token;
+          } else {
+            try {
+              const token = await this.#ensureGitToken(project.id);
+              if (!token) {
+                allOk = false;
+                continue;
+              }
+              lastToken = token;
 
-            const dateUpdated = today();
-            post.dateUpdated = dateUpdated;
+              const dateUpdated = today();
+              post.dateUpdated = dateUpdated;
 
-            const mdxContent = serializeMdx(post);
+              const mdxContent = serializeMdx(post);
 
-            const ts = commitTimestamp();
-            const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-save-${ts}`;
+              const ts = commitTimestamp();
+              const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-save-${ts}`;
 
-            const commitSha = await adapter.commitAndPush(
-              project.id,
-              post.id,
-              mdxContent,
-              message,
-              token,
-            );
+              const commitSha = await adapter.commitAndPush(
+                project.id,
+                post.id,
+                mdxContent,
+                message,
+                token,
+              );
 
-            if (commitSha) pushedSha = commitSha;
+              if (commitSha) pushedSha = commitSha;
 
-            if (!post.draft) anyPublished = true;
+              if (!post.draft) anyPublished = true;
 
-            const syncedPost: IPostRecord = { ...post, dirty: 0 };
+              const syncedPost: IPostRecord = { ...post, dirty: 0 };
 
-            // when editor is open for this post, skip save to db
-            const isEditing =
-              this.config.isPostEditing?.(project.id, post.id) ?? false;
-            if (!isEditing) {
-              await dbSavePost(syncedPost);
+              // when editor is open for this post, skip save to db
+              const isEditing =
+                this.config.isPostEditing?.(project.id, post.id) ?? false;
+              if (!isEditing) {
+                await dbSavePost(syncedPost);
+              }
+
+              this.#runAfterSyncHooks(
+                project.id,
+                post.id,
+                syncedPost,
+                Date.now(),
+              );
+            } catch (err) {
+              console.error(`[syncer] sync failed for ${post.id}:`, err);
+              this.#setStatus(
+                project.id,
+                SyncState.ERROR,
+                err instanceof Error ? err.message : "Sync failed",
+              );
+              allOk = false;
             }
-
-            this.#runAfterSyncHooks(
-              project.id,
-              post.id,
-              syncedPost,
-              Date.now(),
-            );
-          } catch (err) {
-            console.error(`[syncer] sync failed for ${post.id}:`, err);
-            this.#setStatus(
-              project.id,
-              SyncState.ERROR,
-              err instanceof Error ? err.message : "Sync failed",
-            );
-            allOk = false;
           }
         }
 
@@ -336,32 +382,56 @@ export class Syncer {
           return;
         }
 
-        const userPrefs = this.config.getPrefs();
+        // Remove from OPFS regardless of connectivity
+        await deletePostFile(project.id, postId);
+
         const token = await this.#ensureGitToken(project.id);
+
         if (!token) {
+          // no token, mark for deletion by syncAllDirty
+          await dbSavePost({ ...post!, dirty: 1 as const, deleted: true });
+          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
           return;
         }
 
+        const userPrefs = this.config.getPrefs();
         const username = getUsername();
         const ts = commitTimestamp();
         const message = `${APP_NAMESPACE}-${username}-${project.id}-${postId}-delete-${ts}`;
 
         const adapter = await createSyncAdapter(project, userPrefs);
-        const commitSha = await adapter.commitDeletion(
-          project.id,
-          postId,
-          message,
-          token,
-        );
-        await dbDeletePost(project.id, postId);
+        let commitSha: string | null;
+        try {
+          commitSha = await adapter.commitDeletion(
+            project.id,
+            postId,
+            message,
+            token,
+          );
+        } catch (err) {
+          // delete commit failed, mark for deletion by syncAllDirty
+          console.warn(
+            `[syncer] deletion push failed for ${postId}, will retry later:`,
+            err,
+          );
+          await dbSavePost({ ...post!, dirty: 1 as const, deleted: true });
+          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
+          return;
+        }
 
-        if (commitSha) {
+        if (commitSha === null) {
+          // File never existed in git — nothing to push, clean up IDB
+          await dbDeletePost(project.id, postId);
+        } else {
+          // commit is valid, mark for idb cleanup in syncAllDirty
+          await dbSavePost({ ...post!, dirty: 1 as const, deleted: true });
           project.storedRemoteSha = commitSha;
           await dbSaveProject(project);
         }
 
         this.#setStatus(project.id, SyncState.SYNCED);
-
         this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
 
         if (wasPublished) {
