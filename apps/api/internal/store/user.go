@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"log"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -105,6 +106,8 @@ func (db *DB) UpdatePassword(userID, newPassword string, encryptedDEK, kekSalt [
 	return err
 }
 
+const maxSessionsPerUser = 10
+
 func (db *DB) CreateSession(userID string) (*model.Session, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
@@ -124,6 +127,22 @@ func (db *DB) CreateSession(userID string) (*model.Session, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Keep only the most recent sessions for this user.
+	_, pruneErr := db.conn.Exec(
+		`DELETE FROM sessions
+		 WHERE user_id = ?
+		   AND token NOT IN (
+		     SELECT token FROM sessions
+		     WHERE user_id = ?
+		     ORDER BY expires DESC, rowid DESC
+		     LIMIT ?
+		   )`,
+		userID, userID, maxSessionsPerUser,
+	)
+	if pruneErr != nil {
+		log.Printf("failed to prune old sessions for user %s: %v", userID, pruneErr)
 	}
 
 	return session, nil

@@ -2,6 +2,9 @@ package store
 
 import (
 	"testing"
+	"time"
+
+	"github.com/btsv/btsv/api/internal/model"
 )
 
 func setupTest(t *testing.T) *DB {
@@ -188,6 +191,58 @@ func TestCreateAndGetSession(t *testing.T) {
 	}
 	if got.Token != session.Token {
 		t.Fatalf("expected token '%s', got '%s'", session.Token, got.Token)
+	}
+}
+
+func TestCreateSessionCapsAtMaxSessions(t *testing.T) {
+	db := setupTest(t)
+
+	user, err := db.CreateUser("alice", "password123", []byte("dek"), []byte("salt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sessions := make([]*model.Session, 12)
+	for i := 0; i < 12; i++ {
+		sessions[i], err = db.CreateSession(user.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var count int
+	err = db.conn.QueryRow(
+		"SELECT COUNT(*) FROM sessions WHERE user_id = ?",
+		user.ID,
+	).Scan(&count)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 10 {
+		t.Fatalf("expected 10 sessions, got %d", count)
+	}
+
+	// The two oldest sessions should have been pruned.
+	for i := 0; i < 2; i++ {
+		got, err := db.GetSession(sessions[i].Token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Fatalf("expected oldest session %d to be pruned", i)
+		}
+	}
+
+	// The ten newest sessions should still exist.
+	for i := 2; i < 12; i++ {
+		got, err := db.GetSession(sessions[i].Token)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil {
+			t.Fatalf("expected newest session %d to survive", i)
+		}
 	}
 }
 
