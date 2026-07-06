@@ -8,6 +8,7 @@ import {
   getDir,
   getPostPath,
   ensureDirChain,
+  readPostContent,
   writePostFile,
   deletePostFile,
 } from "$lib/fs";
@@ -321,6 +322,8 @@ export class GitAdapter implements ISyncAdapter {
     const dir = getDir(projectId);
     const filepath = getPostPath(postId);
 
+    const headBefore = await git.resolveRef({ fs, dir, ref: "HEAD" }).catch(() => null);
+
     await writePostFile(projectId, postId, content);
 
     const fileStatus = await git.status({ fs, dir, filepath });
@@ -345,15 +348,23 @@ export class GitAdapter implements ISyncAdapter {
       });
     } catch {
       console.warn("[git] push rejected, attempting force push...");
-      await git.push({
-        fs,
-        http,
-        dir,
-        corsProxy: this.proxyUrl,
-        onAuth: createCredentials(gitToken),
-        remoteRef: this.gitBranch,
-        force: true,
-      });
+      try {
+        await git.push({
+          fs,
+          http,
+          dir,
+          corsProxy: this.proxyUrl,
+          onAuth: createCredentials(gitToken),
+          remoteRef: this.gitBranch,
+          force: true,
+        });
+      } catch (err) {
+        if (headBefore) {
+          await git.writeRef({ fs, dir, ref: "HEAD", value: headBefore, force: true });
+        }
+        await git.resetIndex({ fs, dir, filepath, ref: "HEAD" });
+        throw err;
+      }
     }
 
     return sha;
@@ -371,6 +382,8 @@ export class GitAdapter implements ISyncAdapter {
 
     const dir = getDir(projectId);
     const filepath = getPostPath(postId);
+
+    const headBefore = await git.resolveRef({ fs, dir, ref: "HEAD" }).catch(() => null);
 
     await deletePostFile(projectId, postId);
 
@@ -396,15 +409,23 @@ export class GitAdapter implements ISyncAdapter {
       });
     } catch {
       console.warn("[git] push rejected, attempting force push...");
-      await git.push({
-        fs,
-        http,
-        dir,
-        corsProxy: this.proxyUrl,
-        onAuth: createCredentials(gitToken),
-        remoteRef: this.gitBranch,
-        force: true,
-      });
+      try {
+        await git.push({
+          fs,
+          http,
+          dir,
+          corsProxy: this.proxyUrl,
+          onAuth: createCredentials(gitToken),
+          remoteRef: this.gitBranch,
+          force: true,
+        });
+      } catch (err) {
+        if (headBefore) {
+          await git.writeRef({ fs, dir, ref: "HEAD", value: headBefore, force: true });
+        }
+        await git.resetIndex({ fs, dir, filepath, ref: "HEAD" });
+        throw err;
+      }
     }
 
     return sha;

@@ -10,6 +10,9 @@ const mockPush = vi.fn();
 const mockClone = vi.fn();
 const mockInit = vi.fn();
 const mockLog = vi.fn();
+const mockResolveRef = vi.fn();
+const mockWriteRef = vi.fn();
+const mockResetIndex = vi.fn();
 const mockHttp = Symbol("http");
 
 vi.mock("isomorphic-git", () => ({
@@ -22,6 +25,9 @@ vi.mock("isomorphic-git", () => ({
   clone: mockClone,
   init: mockInit,
   log: mockLog,
+  resolveRef: mockResolveRef,
+  writeRef: mockWriteRef,
+  resetIndex: mockResetIndex,
 }));
 
 vi.mock("isomorphic-git/http/web", () => ({ default: mockHttp }));
@@ -79,6 +85,10 @@ beforeEach(() => {
   );
 
   mockUnlink.mockResolvedValue(undefined);
+
+  mockResolveRef.mockResolvedValue("abc123def456");
+  mockWriteRef.mockResolvedValue(undefined);
+  mockResetIndex.mockResolvedValue(undefined);
 });
 
 describe("constructor", () => {

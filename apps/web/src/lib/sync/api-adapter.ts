@@ -376,8 +376,6 @@ export class ApiAdapter implements ISyncAdapter {
     message: string,
     gitToken: string,
   ): Promise<string | null> {
-    await writePostFile(projectId, postId, content);
-
     const filepath = getPostPath(postId);
     const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${filepath}`;
     const branchUrl = `${url}?ref=${encodeURIComponent(this.gitBranch)}`;
@@ -395,6 +393,7 @@ export class ApiAdapter implements ISyncAdapter {
     );
 
     const result = await putRes.json();
+    await writePostFile(projectId, postId, content);
     return result.commit?.sha ?? null;
   }
 
