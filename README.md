@@ -121,8 +121,8 @@ make lint
 The four services are dockerized for production deployment:
 
 | Service | Image | Port | Domain |
-|---|---|---|---|
-| **Web** | nginx (static SPA) | `8100` | `app.btsv.space` |
+|---|---|---|---|---|
+| **Web** | nginx (static SPA) | `8103` | `app.btsv.space` |
 | **API** | Go binary on alpine | `8101` | `api.btsv.space` |
 | **Proxy** | Go binary on alpine | `8102` | `proxy.btsv.space` |
 
@@ -162,13 +162,21 @@ when `main` is updated.
 
    | Field | Value |
    |---|---|
+    | Field | Value |
+    |---|---|
 
-   | Content type | `application/json` |
+    | Content type | `application/json` |
 
-   | Events | Just the push event |
+    | SSL verification | Enable (Cloudflare terminates TLS) |
+    | Events | Just the push event |
 
 
-   pull the latest code and restart all services.
+   to your server's IP, with the proxy (orange cloud) enabled. Cloudflare
+   handles TLS termination and forwards HTTPS requests as plain HTTP to the
+
+
+4. Run `docker compose --env-file .env.production up --build -d`. On each push
+
 
 ### Environment
 
