@@ -3,7 +3,7 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { getProject } from "$lib/stores/projects.svelte";
-  import { loadPosts } from "$lib/stores/syncer.svelte";
+  import { syncer, loadPosts } from "$lib/stores/syncer.svelte";
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { dbGetPost, dbSavePost } from "$lib/db";
   import {
@@ -40,12 +40,24 @@
   }
 
   onMount(async () => {
+    // populate cached posts
     posts = await loadPosts(projectId, {
       pullOption: "never",
       page: currentPage,
     });
+    // load posts from pull
     console.log(`[/:projectId] onMount: loading posts`);
     await loadPage({ pullOption: "always", page: currentPage });
+  });
+
+  onMount(() => {
+    // update posts list after a sync
+    const unsubAfterSync = syncer.addAfterSyncHook((hookProjectId) => {
+      if (hookProjectId !== projectId) return;
+      // just synced, no need to sync again, if not it'll be infinite
+      void loadPage({ pullOption: "never", page: currentPage });
+    });
+    return unsubAfterSync;
   });
 
   afterNavigate(() => {
