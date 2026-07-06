@@ -33,6 +33,11 @@
     {/if}
     <p class="text-[15px] mb-4 text-foreground">{message}</p>
     <div class="flex gap-2 justify-end flex-wrap">
+      {#if onCancel}
+        <button class="btn-outline" onclick={onCancel}>
+          {cancelText}
+        </button>
+      {/if}
       <button
         class={danger ? "btn-destructive" : "btn-primary"}
         onclick={onConfirm}
@@ -42,11 +47,6 @@
       {#if onDiscard}
         <button class="btn-outline" onclick={onDiscard}>
           Discard changes
-        </button>
-      {/if}
-      {#if onCancel}
-        <button class="btn-outline" onclick={onCancel}>
-          {cancelText}
         </button>
       {/if}
     </div>

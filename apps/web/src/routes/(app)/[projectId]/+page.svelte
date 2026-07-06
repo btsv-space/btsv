@@ -14,7 +14,8 @@
   import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
   import { today } from "$lib/shared/utils";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
-  import { FilePlus, ChevronLeft, ChevronRight } from "@lucide/svelte";
+  import EditTokenModal from "$lib/components/EditTokenModal.svelte";
+  import { FilePlus, ChevronLeft, ChevronRight, Wrench } from "@lucide/svelte";
 
   const projectId = page.params.projectId!;
 
@@ -66,6 +67,7 @@
 
   let retrying = $state(false);
   let retryError = $state("");
+  let editingToken = $state(false);
 
   const projectEntry = $derived(getProject(projectId));
 
@@ -165,6 +167,16 @@
     </button>
   </div>
 {:else if projectEntry.status === "ready"}
+  <div class="-mt-2 mb-4">
+    <button
+      class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 px-3 rounded-full"
+      onclick={() => {
+        editingToken = true;
+      }}
+    >
+      <Wrench class="icon" /> Edit
+    </button>
+  </div>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     <button
       class="hidden md:flex card border-dashed border-2 border-muted-foreground/30 hover:border-primary/50 flex-col items-center justify-center gap-2 p-6 text-muted-foreground hover:text-primary transition-colors cursor-pointer min-h-[120px]"
@@ -266,6 +278,16 @@
   <FloatingButton class="md:hidden" onclick={handleCreate}>
     <FilePlus class="icon" /> New Post
   </FloatingButton>
+
+  {#if projectEntry}
+    <EditTokenModal
+      projectId={projectEntry.id}
+      show={editingToken}
+      onclose={() => {
+        editingToken = false;
+      }}
+    />
+  {/if}
 {:else}
   <p class="text-muted-foreground mt-4">Checking repository...</p>
 {/if}

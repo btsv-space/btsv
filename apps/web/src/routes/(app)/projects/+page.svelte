@@ -7,10 +7,11 @@
   import { encryptToken, bytesToApi } from "$lib/crypto";
   import { getDEK, gitTokenCache } from "$lib/stores/auth.svelte";
   import type { TProjectEntry } from "$lib/shared/types";
-  import { GITHUB_TOKEN_URL } from "$lib/shared/constants";
-  import { FolderPlus, X } from "@lucide/svelte";
+  import { FolderPlus, Wrench } from "@lucide/svelte";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import Modal from "$lib/components/Modal.svelte";
+  import GitTokenField from "$lib/components/GitTokenField.svelte";
+  import EditTokenModal from "$lib/components/EditTokenModal.svelte";
 
   console.log("[/projects] mounted");
 
@@ -20,13 +21,12 @@
   let name = $state("");
   let repoUrl = $state("");
   let gitToken = $state("");
-  let showTokenHelp = $state(false);
+  let editingProject = $state<string | null>(null);
 
   function resetForm() {
     name = "";
     repoUrl = "";
     gitToken = "";
-    showTokenHelp = false;
     formError = "";
   }
 
@@ -120,7 +120,9 @@
       </p>
     {/if}
 
-    <label class="flex flex-col gap-1 text-xs text-muted-foreground">
+    <label
+      class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+    >
       <span class="flex items-center gap-2">
         Repo URL <span class="text-destructive">*</span>
       </span>
@@ -133,7 +135,9 @@
       />
     </label>
 
-    <label class="flex flex-col gap-1 text-xs text-muted-foreground">
+    <label
+      class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+    >
       <span class="flex items-center gap-2">Name</span>
       <input
         type="text"
@@ -143,85 +147,9 @@
       />
     </label>
 
-    <label class="flex flex-col gap-1 text-xs text-muted-foreground">
-      <span class="flex items-center gap-2">
-        Git Token <span class="text-destructive">*</span>
-        <button
-          type="button"
-          class="bg-none border-none text-primary cursor-pointer text-xs p-0"
-          onclick={() => (showTokenHelp = !showTokenHelp)}
-        >
-          {showTokenHelp ? "Hide help" : "(?)"}
-        </button>
-      </span>
-      <input
-        type="password"
-        bind:value={gitToken}
-        required
-        placeholder="github_pat_..."
-        class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
-      />
-    </label>
-
-    {#if showTokenHelp}
-      <div
-        class="relative text-sm text-foreground bg-muted/40 border border-border rounded-md p-3 leading-relaxed"
-      >
-        <button
-          type="button"
-          class="absolute top-2 right-2 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-          onclick={() => (showTokenHelp = false)}
-          aria-label="Close help"
-        >
-          <X class="w-4 h-4" />
-        </button>
-        <ol class="list-decimal list-inside space-y-2 m-0 pt-2">
-          <li>
-            Open GitHub → Settings → Developer settings → Fine-grained tokens →
-            Generate new token
-          </li>
-          <li>
-            <strong>Repository access:</strong> Only select repositories → choose
-            your blog repo
-          </li>
-          <li>
-            <strong>Permissions</strong> (only one needed):
-            <code
-              class="text-xs bg-background px-1.5 py-0.5 rounded-sm border border-border"
-              >Contents → Read &amp; Write</code
-            >
-          </li>
-          <li>
-            Copy the token. It starts with <code
-              class="text-xs bg-background px-1.5 py-0.5 rounded-sm border border-border"
-              >github_pat_</code
-            >
-          </li>
-        </ol>
-        <a
-          href={GITHUB_TOKEN_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-1 mt-3 text-sm font-medium text-primary hover:underline"
-        >
-          Open GitHub token page
-          <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none"
-            ><path
-              d="M1 11L11 1M11 1H4M11 1V8"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            /></svg
-          >
-        </a>
-      </div>
-    {/if}
+    <GitTokenField id="new-project-token" bind:value={gitToken} />
 
     <div class="flex gap-2 justify-between mt-2">
-      <button type="submit" class="btn-primary" disabled={formSubmitting}>
-        {formSubmitting ? "Creating & cloning..." : "Create & Clone"}
-      </button>
       <button
         type="button"
         class="btn-secondary"
@@ -231,6 +159,9 @@
         }}
       >
         Cancel
+      </button>
+      <button type="submit" class="btn-primary" disabled={formSubmitting}>
+        {formSubmitting ? "Creating & cloning..." : "Create & Clone"}
       </button>
     </div>
   </form>
@@ -262,32 +193,46 @@
         role="link"
         tabindex="0"
       >
-        <div class="min-w-0 flex-1">
-          <h3 class="text-base font-semibold m-0 mb-1">{project.name}</h3>
-          <p class="text-sm text-muted-foreground m-0 truncate">
-            {project.repoUrl}
-          </p>
-          <div class="flex items-center gap-2 mt-2">
-            <span
-              class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full {isReady
-                ? 'bg-green-500/12 text-green-500'
-                : isCloning
-                  ? 'bg-amber-500/12 text-amber-500'
-                  : isError
-                    ? 'bg-destructive/12 text-destructive'
-                    : 'bg-muted-foreground/12 text-muted-foreground'}"
-            >
-              {isReady
-                ? "Ready"
-                : isError
-                  ? "Error"
+        <div class="min-w-0 flex-1 flex flex-col gap-3">
+          <div class="flex flex-col gap-1">
+            <h3 class="text-base font-semibold m-0">{project.name}</h3>
+            <p class="text-sm text-muted-foreground m-0 truncate">
+              {project.repoUrl}
+            </p>
+          </div>
+          <div class="flex items-end justify-between">
+            <div class="flex items-center gap-2">
+              <span
+                class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full {isReady
+                  ? 'bg-green-500/12 text-green-500'
                   : isCloning
-                    ? "Cloning..."
-                    : "Unknown"}
-            </span>
-            {#if isError}
-              <span class="text-xs text-destructive">{project.error}</span>
-            {/if}
+                    ? 'bg-amber-500/12 text-amber-500'
+                    : isError
+                      ? 'bg-destructive/12 text-destructive'
+                      : 'bg-muted-foreground/12 text-muted-foreground'}"
+              >
+                {isReady
+                  ? "Ready"
+                  : isError
+                    ? "Error"
+                    : isCloning
+                      ? "Cloning..."
+                      : "Unknown"}
+              </span>
+              {#if isError}
+                <span class="text-xs text-destructive">{project.error}</span>
+              {/if}
+            </div>
+            <button
+              class="btn-secondary p-2 text-muted-foreground cursor-pointer rounded-full -mr-1 -mb-1"
+              onclick={(e) => {
+                e.stopPropagation();
+                editingProject = project.id;
+              }}
+              aria-label="Edit token"
+            >
+              <Wrench class="icon" />
+            </button>
           </div>
         </div>
       </div>
@@ -298,3 +243,11 @@
 <FloatingButton class="md:hidden" onclick={() => (showCreateForm = true)}>
   <FolderPlus class="icon" /> New Project
 </FloatingButton>
+
+<EditTokenModal
+  projectId={editingProject ?? ""}
+  show={editingProject != null}
+  onclose={() => {
+    editingProject = null;
+  }}
+/>
