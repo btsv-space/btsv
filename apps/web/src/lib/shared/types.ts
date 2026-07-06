@@ -189,7 +189,7 @@ export interface ISyncerConfig {
 }
 
 export interface ILoadPostsOpts {
-  forcePull?: boolean;
+  pullOption?: "always" | "check" | "never";
   page?: number;
   pageSize?: number;
 }

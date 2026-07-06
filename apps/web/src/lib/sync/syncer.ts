@@ -278,8 +278,6 @@ export class Syncer {
               await dbSavePost(syncedPost);
             }
 
-            // TODO: check if there are any dirty/remaining hooks
-            // that will mess up with dirty state
             this.#runAfterSyncHooks(
               project.id,
               post.id,

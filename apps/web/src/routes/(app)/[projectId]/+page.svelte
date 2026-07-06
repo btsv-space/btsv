@@ -40,12 +40,16 @@
   }
 
   onMount(async () => {
+    posts = await loadPosts(projectId, {
+      pullOption: "never",
+      page: currentPage,
+    });
     console.log(`[/:projectId] onMount: loading posts`);
-    await loadPage({ forcePull: true, page: currentPage });
+    await loadPage({ pullOption: "always", page: currentPage });
   });
 
   afterNavigate(() => {
-    void loadPage({ forcePull: false, page: currentPage });
+    void loadPage({ pullOption: "check", page: currentPage });
   });
 
   let retrying = $state(false);
