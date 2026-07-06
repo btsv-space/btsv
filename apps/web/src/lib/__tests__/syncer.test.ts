@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Syncer } from "$lib/sync/syncer";
 import {
-  SyncState,
+  ESyncState,
   type IPostRecord,
   type TSyncType,
   type TProjectEntry,
@@ -816,7 +816,7 @@ describe("Syncer", () => {
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
         {
-          state: SyncState.ERROR,
+          state: ESyncState.ERROR,
           errorMsg: "No git token available",
         },
         null,
@@ -833,7 +833,7 @@ describe("Syncer", () => {
       // File-not-on-disk path fires SYNCED status after the deletion.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: SyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, errorMsg: "" },
         null,
       );
     });
@@ -872,7 +872,7 @@ describe("Syncer", () => {
       );
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: SyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, errorMsg: "" },
         null,
       );
     });
@@ -890,7 +890,7 @@ describe("Syncer", () => {
       // The !existsOnDisk path fires SYNCED.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: SyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, errorMsg: "" },
         null,
       );
     });

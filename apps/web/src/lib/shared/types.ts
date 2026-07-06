@@ -3,13 +3,13 @@ import type { DebouncedSaver } from "$lib/saver";
 
 // ── Enums ──────────────────────────────────────────
 
-export enum Route {
+export enum ERoute {
   HOME = "/",
   LOGIN = "/login",
   SETTINGS = "/settings",
 }
 
-export enum SyncState {
+export enum ESyncState {
   SYNCED = "synced",
   SYNCING_PULL = "syncing-pull",
   SYNCING_PUSH = "syncing-push",
@@ -18,7 +18,7 @@ export enum SyncState {
   CONFLICT = "conflict",
 }
 
-export enum SyncerOps {
+export enum ESyncerOps {
   PULL = "pull",
   PUSH = "push",
   DELETE = "delete",
@@ -28,7 +28,7 @@ export enum SyncerOps {
 export interface ISyncerProjectQueueValue {
   tail: Promise<unknown>;
   lastPromise: Promise<unknown>;
-  lastOp: SyncerOps;
+  lastOp: ESyncerOps;
   lastOpResolved: boolean;
 }
 
@@ -46,7 +46,7 @@ export interface IProject {
 }
 
 export interface ISyncStatus {
-  state: SyncState;
+  state: ESyncState;
   errorMsg: string;
   dirty: boolean;
 }

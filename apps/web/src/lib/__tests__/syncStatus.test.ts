@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { SyncState } from "$lib/shared/types";
+import { ESyncState } from "$lib/shared/types";
 
 const STORAGE_KEY = "btsv:syncStatus";
 
@@ -37,14 +37,14 @@ describe("syncStatus store", () => {
   it("persists state + errorMsg via setStateAndMsg; dirty omitted from localStorage", async () => {
     const { syncStatus } = await importFreshStore();
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.ERROR,
+      state: ESyncState.ERROR,
       errorMsg: "failed",
     });
 
     const raw = localStorage.getItem(STORAGE_KEY);
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw!)).toEqual({
-      "proj-1": { state: SyncState.ERROR, errorMsg: "failed" },
+      "proj-1": { state: ESyncState.ERROR, errorMsg: "failed" },
     });
     // `dirty` is in-memory only:
     expect(syncStatus.get("proj-1")?.dirty).toBe(false);
@@ -54,12 +54,12 @@ describe("syncStatus store", () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        "proj-1": { state: SyncState.ERROR, errorMsg: "bad" },
+        "proj-1": { state: ESyncState.ERROR, errorMsg: "bad" },
       }),
     );
 
     const { syncStatus } = await importFreshStore();
-    expect(syncStatus.get("proj-1")?.state).toBe(SyncState.ERROR);
+    expect(syncStatus.get("proj-1")?.state).toBe(ESyncState.ERROR);
     expect(syncStatus.get("proj-1")?.errorMsg).toBe("bad");
     expect(syncStatus.get("proj-1")?.dirty).toBe(false);
   });
@@ -69,7 +69,7 @@ describe("syncStatus store", () => {
       STORAGE_KEY,
       JSON.stringify({
         "proj-1": {
-          state: SyncState.SYNCED,
+          state: ESyncState.SYNCED,
           errorMsg: "",
           dirty: true,
         },
@@ -84,7 +84,7 @@ describe("syncStatus store", () => {
   it("clears localStorage on clear", async () => {
     const { syncStatus } = await importFreshStore();
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.ERROR,
+      state: ESyncState.ERROR,
       errorMsg: "failed",
     });
     syncStatus.clear();
@@ -97,16 +97,16 @@ describe("syncStatus store", () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        "proj-1": { state: SyncState.SYNCING_PULL, errorMsg: "" },
-        "proj-2": { state: SyncState.SYNCING_PUSH, errorMsg: "" },
-        "proj-3": { state: SyncState.ERROR, errorMsg: "bad" },
+        "proj-1": { state: ESyncState.SYNCING_PULL, errorMsg: "" },
+        "proj-2": { state: ESyncState.SYNCING_PUSH, errorMsg: "" },
+        "proj-3": { state: ESyncState.ERROR, errorMsg: "bad" },
       }),
     );
 
     const { syncStatus } = await importFreshStore();
-    expect(syncStatus.get("proj-1")?.state).toBe(SyncState.SYNCED);
-    expect(syncStatus.get("proj-2")?.state).toBe(SyncState.SYNCED);
-    expect(syncStatus.get("proj-3")?.state).toBe(SyncState.ERROR);
+    expect(syncStatus.get("proj-1")?.state).toBe(ESyncState.SYNCED);
+    expect(syncStatus.get("proj-2")?.state).toBe(ESyncState.SYNCED);
+    expect(syncStatus.get("proj-3")?.state).toBe(ESyncState.ERROR);
   });
 
   it("setStateAndMsg preserves in-memory dirty across state changes", async () => {
@@ -114,22 +114,22 @@ describe("syncStatus store", () => {
 
     // Create the entry first, then mark dirty.
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.SYNCED,
+      state: ESyncState.SYNCED,
       errorMsg: "",
     });
     syncStatus.updateDirty("proj-1", true);
     expect(syncStatus.get("proj-1")?.dirty).toBe(true);
 
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.SYNCING_PUSH,
+      state: ESyncState.SYNCING_PUSH,
       errorMsg: "",
     });
-    expect(syncStatus.get("proj-1")?.state).toBe(SyncState.SYNCING_PUSH);
+    expect(syncStatus.get("proj-1")?.state).toBe(ESyncState.SYNCING_PUSH);
     expect(syncStatus.get("proj-1")?.dirty).toBe(true);
 
     // localStorage persisted shape excludes dirty:
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).toEqual({
-      "proj-1": { state: SyncState.SYNCING_PUSH, errorMsg: "" },
+      "proj-1": { state: ESyncState.SYNCING_PUSH, errorMsg: "" },
     });
   });
 
@@ -149,8 +149,8 @@ describe("syncStatus store", () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
-        "proj-1": { state: SyncState.SYNCED, errorMsg: "" },
-        "proj-2": { state: SyncState.SYNCED, errorMsg: "" },
+        "proj-1": { state: ESyncState.SYNCED, errorMsg: "" },
+        "proj-2": { state: ESyncState.SYNCED, errorMsg: "" },
       }),
     );
     // proj-1 has dirty posts; proj-2 is clean.
@@ -185,7 +185,7 @@ describe("syncStatus store", () => {
   it("updateDirty with override sets dirty synchronously", async () => {
     const { syncStatus } = await importFreshStore();
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.SYNCED,
+      state: ESyncState.SYNCED,
       errorMsg: "",
     });
     syncStatus.updateDirty("proj-1", true);
@@ -195,7 +195,7 @@ describe("syncStatus store", () => {
   it("updateDirty with null override relies on IDB for dirty flag", async () => {
     const { syncStatus } = await importFreshStore();
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.SYNCED,
+      state: ESyncState.SYNCED,
       errorMsg: "",
     });
 
@@ -215,7 +215,7 @@ describe("syncStatus store", () => {
   it("updateDirty async IDB reconciliation flips dirty when IDB has posts", async () => {
     const { syncStatus } = await importFreshStore();
     syncStatus.setStateAndMsg("proj-1", {
-      state: SyncState.SYNCED,
+      state: ESyncState.SYNCED,
       errorMsg: "",
     });
 

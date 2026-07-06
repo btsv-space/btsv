@@ -1,6 +1,6 @@
 <script lang="ts">
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
-  import { SyncState } from "$lib/shared/types";
+  import { ESyncState } from "$lib/shared/types";
   import { onMount } from "svelte";
   import { Save } from "@lucide/svelte";
 
@@ -31,37 +31,37 @@
   const effectiveState = $derived(
     !online
       ? "offline"
-      : status?.state === SyncState.SYNCING_PUSH
-        ? SyncState.SYNCING_PUSH
-        : status?.state === SyncState.SYNCING_PULL
-          ? SyncState.SYNCING_PULL
-          : status?.state === SyncState.CONFLICT
-            ? SyncState.CONFLICT
+      : status?.state === ESyncState.SYNCING_PUSH
+        ? ESyncState.SYNCING_PUSH
+        : status?.state === ESyncState.SYNCING_PULL
+          ? ESyncState.SYNCING_PULL
+          : status?.state === ESyncState.CONFLICT
+            ? ESyncState.CONFLICT
             : status?.dirty
-              ? SyncState.DIRTY
-              : status?.state === SyncState.ERROR
-                ? SyncState.ERROR
-                : SyncState.SYNCED,
+              ? ESyncState.DIRTY
+              : status?.state === ESyncState.ERROR
+                ? ESyncState.ERROR
+                : ESyncState.SYNCED,
   );
 
   let label = $derived(
     !online
       ? "Offline"
-      : effectiveState === SyncState.SYNCED
+      : effectiveState === ESyncState.SYNCED
         ? "Synced"
-        : effectiveState === SyncState.DIRTY
+        : effectiveState === ESyncState.DIRTY
           ? "Unsaved changes"
-          : effectiveState === SyncState.SYNCING_PUSH
+          : effectiveState === ESyncState.SYNCING_PUSH
             ? "Saving..."
-            : effectiveState === SyncState.SYNCING_PULL
+            : effectiveState === ESyncState.SYNCING_PULL
               ? "Loading..."
-              : effectiveState === SyncState.CONFLICT
+              : effectiveState === ESyncState.CONFLICT
                 ? "Needs resolution"
                 : "Sync failed",
   );
 
   let title = $derived(
-    effectiveState === SyncState.ERROR
+    effectiveState === ESyncState.ERROR
       ? `${label}: ${status?.errorMsg ?? ""}`
       : label,
   );
@@ -78,16 +78,16 @@
     class:border={effectiveState === "offline"}
     class:border-border={effectiveState === "offline"}
     class:bg-transparent={effectiveState === "offline"}
-    class:bg-green-500={effectiveState === SyncState.SYNCED}
-    class:bg-amber-500={effectiveState === SyncState.DIRTY}
-    class:bg-lime-500={effectiveState === SyncState.SYNCING_PUSH}
-    class:bg-cyan-500={effectiveState === SyncState.SYNCING_PULL}
-    class:animate-pulse-fast={effectiveState === SyncState.SYNCING_PUSH ||
-      effectiveState === SyncState.SYNCING_PULL}
-    class:bg-fuchsia-500={effectiveState === SyncState.CONFLICT}
-    class:bg-destructive={effectiveState === SyncState.ERROR}
+    class:bg-green-500={effectiveState === ESyncState.SYNCED}
+    class:bg-amber-500={effectiveState === ESyncState.DIRTY}
+    class:bg-lime-500={effectiveState === ESyncState.SYNCING_PUSH}
+    class:bg-cyan-500={effectiveState === ESyncState.SYNCING_PULL}
+    class:animate-pulse-fast={effectiveState === ESyncState.SYNCING_PUSH ||
+      effectiveState === ESyncState.SYNCING_PULL}
+    class:bg-fuchsia-500={effectiveState === ESyncState.CONFLICT}
+    class:bg-destructive={effectiveState === ESyncState.ERROR}
   ></span>
-  {#if onSave && effectiveState === SyncState.DIRTY}
+  {#if onSave && effectiveState === ESyncState.DIRTY}
     <button class="btn-outline" onclick={onSave}>
       <Save class="icon text-secondary-foreground" />
     </button>

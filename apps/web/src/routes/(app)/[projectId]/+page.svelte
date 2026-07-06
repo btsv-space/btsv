@@ -7,7 +7,7 @@
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { dbGetPost, dbSavePost } from "$lib/db";
   import {
-    SyncState,
+    ESyncState,
     type ILoadPostsOpts,
     type IPostRecord,
   } from "$lib/shared/types";
@@ -174,7 +174,7 @@
       <span class="text-sm font-medium">New Post</span>
     </button>
 
-    {#if posts.length === 0 && syncStatus.get(projectId)?.state !== SyncState.SYNCING_PULL}
+    {#if posts.length === 0 && syncStatus.get(projectId)?.state !== ESyncState.SYNCING_PULL}
       {#if currentPage > 1}
         <p class="text-muted-foreground col-span-full">
           No posts on this page.

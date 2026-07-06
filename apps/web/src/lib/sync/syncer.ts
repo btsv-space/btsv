@@ -12,8 +12,8 @@ import { commitTimestamp, today } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
 import { postFileExists, deletePostFile } from "$lib/fs";
 import {
-  SyncerOps,
-  SyncState,
+  ESyncerOps,
+  ESyncState,
   type IPostEntry,
   type IPostRecord,
   type ISyncerProjectQueueValue,
@@ -40,7 +40,7 @@ export class Syncer {
 
   #setStatus(
     projectId: string,
-    state: SyncState,
+    state: ESyncState,
     errorMsg = "",
     dirtyOverride: boolean | null = null,
   ): void {
@@ -48,7 +48,7 @@ export class Syncer {
       projectId,
       {
         state,
-        errorMsg: state === SyncState.ERROR ? errorMsg : "",
+        errorMsg: state === ESyncState.ERROR ? errorMsg : "",
       },
       dirtyOverride,
     );
@@ -58,7 +58,7 @@ export class Syncer {
     const token = await ensureGitToken(projectId);
     if (!token) {
       console.error(`[syncer] no git token for ${projectId}`);
-      this.#setStatus(projectId, SyncState.ERROR, "No git token available");
+      this.#setStatus(projectId, ESyncState.ERROR, "No git token available");
     }
     return token;
   }
@@ -66,7 +66,7 @@ export class Syncer {
   async #runSerial<T>(
     projectId: string,
     fn: () => Promise<T>,
-    opType: SyncerOps,
+    opType: ESyncerOps,
   ): Promise<T> {
     const prev = this.projectQueue.get(projectId)?.tail ?? Promise.resolve();
     const next = prev.catch(() => {}).then(fn);
@@ -93,7 +93,7 @@ export class Syncer {
   async pull(project: TProjectEntry): Promise<IPostRecord[]> {
     const q = this.projectQueue.get(project.id);
     // if the previous queue op is an active pull, just return that
-    if (q?.lastOp === SyncerOps.PULL && !q.lastOpResolved && q.lastPromise) {
+    if (q?.lastOp === ESyncerOps.PULL && !q.lastOpResolved && q.lastPromise) {
       return q.lastPromise as Promise<IPostRecord[]>;
     }
 
@@ -128,11 +128,11 @@ export class Syncer {
               undefined,
               lastCommitTime,
             );
-            this.#setStatus(project.id, SyncState.SYNCED);
+            this.#setStatus(project.id, ESyncState.SYNCED);
             return [];
           }
 
-          this.#setStatus(project.id, SyncState.SYNCING_PULL);
+          this.#setStatus(project.id, ESyncState.SYNCING_PULL);
           const postEntries = await adapter.pull(
             project.id,
             token,
@@ -156,18 +156,18 @@ export class Syncer {
             undefined,
             lastCommitTime,
           );
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
           return postRecords;
         } catch (err) {
           this.#setStatus(
             project.id,
-            SyncState.ERROR,
+            ESyncState.ERROR,
             err instanceof Error ? err.message : "Pull failed",
           );
           return [];
         }
       },
-      SyncerOps.PULL,
+      ESyncerOps.PULL,
     );
   }
 
@@ -184,7 +184,7 @@ export class Syncer {
           return [];
         }
         const adapter = await createSyncAdapter(project, userPrefs);
-        this.#setStatus(project.id, SyncState.SYNCING_PULL);
+        this.#setStatus(project.id, ESyncState.SYNCING_PULL);
         try {
           const { postEntries, lastCommitTime, headSha } =
             await adapter.initialPull(project.id, token);
@@ -205,18 +205,18 @@ export class Syncer {
             undefined,
             lastCommitTime,
           );
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
           return postRecords;
         } catch (err) {
           this.#setStatus(
             project.id,
-            SyncState.ERROR,
+            ESyncState.ERROR,
             err instanceof Error ? err.message : "Initial pull failed",
           );
           return [];
         }
       },
-      SyncerOps.INITIAL_PULL,
+      ESyncerOps.INITIAL_PULL,
     );
   }
 
@@ -227,11 +227,11 @@ export class Syncer {
         const dirty = await dbGetDirtyPosts(project.id);
         if (dirty.length === 0) {
           // we just got dirty from db, can override dirty status
-          this.#setStatus(project.id, SyncState.SYNCED, "", false);
+          this.#setStatus(project.id, ESyncState.SYNCED, "", false);
           return true;
         }
 
-        this.#setStatus(project.id, SyncState.SYNCING_PUSH);
+        this.#setStatus(project.id, ESyncState.SYNCING_PUSH);
         const userPrefs = this.config.getPrefs();
         const username = getUsername();
         const adapter = await createSyncAdapter(project, userPrefs);
@@ -280,7 +280,7 @@ export class Syncer {
               );
               this.#setStatus(
                 project.id,
-                SyncState.ERROR,
+                ESyncState.ERROR,
                 err instanceof Error ? err.message : "Deletion sync failed",
               );
               allOk = false;
@@ -333,7 +333,7 @@ export class Syncer {
               console.error(`[syncer] sync failed for ${post.id}:`, err);
               this.#setStatus(
                 project.id,
-                SyncState.ERROR,
+                ESyncState.ERROR,
                 err instanceof Error ? err.message : "Sync failed",
               );
               allOk = false;
@@ -358,12 +358,12 @@ export class Syncer {
         }
 
         if (allOk) {
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
         }
 
         return allOk;
       },
-      SyncerOps.PUSH,
+      ESyncerOps.PUSH,
     );
   }
 
@@ -377,7 +377,7 @@ export class Syncer {
         const existsOnDisk = await postFileExists(project.id, postId);
         if (!existsOnDisk) {
           await dbDeletePost(project.id, postId);
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
           this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
           return;
         }
@@ -390,7 +390,7 @@ export class Syncer {
         if (!token) {
           // no token, mark for deletion by syncAllDirty
           await dbSavePost({ ...post!, dirty: 1 as const, deleted: true });
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
           this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
           return;
         }
@@ -416,7 +416,7 @@ export class Syncer {
             err,
           );
           await dbSavePost({ ...post!, dirty: 1 as const, deleted: true });
-          this.#setStatus(project.id, SyncState.SYNCED);
+          this.#setStatus(project.id, ESyncState.SYNCED);
           this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
           return;
         }
@@ -431,7 +431,7 @@ export class Syncer {
           await dbSaveProject(project);
         }
 
-        this.#setStatus(project.id, SyncState.SYNCED);
+        this.#setStatus(project.id, ESyncState.SYNCED);
         this.#runAfterSyncHooks(project.id, postId, undefined, Date.now());
 
         if (wasPublished) {
@@ -445,7 +445,7 @@ export class Syncer {
           }
         }
       },
-      SyncerOps.DELETE,
+      ESyncerOps.DELETE,
     );
   }
 

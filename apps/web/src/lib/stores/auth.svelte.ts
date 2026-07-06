@@ -2,7 +2,7 @@ import { goto } from "$app/navigation";
 import { api } from "$lib/api";
 import { decryptToken, dekFromBase64, bytesFromApi } from "$lib/crypto";
 import { APP_NAMESPACE } from "$lib/shared/constants";
-import { Route, type IUser, type TSyncType } from "$lib/shared/types";
+import { ERoute, type IUser, type TSyncType } from "$lib/shared/types";
 import { SvelteMap } from "svelte/reactivity";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects } from "$lib/stores/projects.svelte";
@@ -93,6 +93,6 @@ export async function logout() {
     projects.value = [];
     syncStatus.clear();
     prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
-    goto(Route.LOGIN, { replaceState: true });
+    goto(ERoute.LOGIN, { replaceState: true });
   }
 }

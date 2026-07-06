@@ -17,7 +17,7 @@
     bytesToApi,
   } from "$lib/crypto";
   import { IV_LENGTH } from "$lib/shared/constants";
-  import { Route } from "$lib/shared/types";
+  import { ERoute } from "$lib/shared/types";
   import { onMount } from "svelte";
 
   const DEK_KEY = "btsv_dek";
@@ -33,7 +33,7 @@
   onMount(async () => {
     await ensureInit();
     if (isAuthenticated.value) {
-      goto(Route.HOME, { replaceState: true });
+      goto(ERoute.HOME, { replaceState: true });
     }
   });
 
@@ -53,7 +53,7 @@
     dek.value = plainDek;
     currentUser.value = result.user;
     isAuthenticated.value = true;
-    goto(Route.HOME, { replaceState: true });
+    goto(ERoute.HOME, { replaceState: true });
   }
 
   async function register(uname: string, pwd: string) {
@@ -77,7 +77,7 @@
     dek.value = plainDek;
     currentUser.value = user;
     isAuthenticated.value = true;
-    goto(Route.HOME, { replaceState: true });
+    goto(ERoute.HOME, { replaceState: true });
   }
 
   async function handleSubmit(e: Event) {

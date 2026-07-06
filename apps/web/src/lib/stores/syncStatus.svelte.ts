@@ -1,6 +1,6 @@
 import { SvelteMap } from "svelte/reactivity";
 import { dbGetDirtyPosts } from "$lib/db";
-import { SyncState, type ISyncStatus } from "$lib/shared/types";
+import { ESyncState, type ISyncStatus } from "$lib/shared/types";
 
 const STORAGE_KEY = "btsv:syncStatus";
 
@@ -63,10 +63,10 @@ class SyncStatusStore {
       // the operation that set them is gone, so we default to SYNCED.
       for (const [projectId, status] of Object.entries(parsed)) {
         const isSyncing =
-          status.state === SyncState.SYNCING_PULL ||
-          status.state === SyncState.SYNCING_PUSH;
+          status.state === ESyncState.SYNCING_PULL ||
+          status.state === ESyncState.SYNCING_PUSH;
         map.set(projectId, {
-          state: isSyncing ? SyncState.SYNCED : status.state,
+          state: isSyncing ? ESyncState.SYNCED : status.state,
           errorMsg: isSyncing ? "" : status.errorMsg,
           dirty: false,
         });
