@@ -86,12 +86,13 @@ golangci-lint run ./...
 | `PORT` | `8080` | Server listen port |
 | `DATA_DIR` | `./data` | SQLite database directory |
 | `ENCRYPTION_KEY` | generated on startup | 32-byte key for AES-GCM token encryption. Set a fixed value for persistence across restarts. |
+| `COOKIE_DOMAIN` | — | Session cookie domain; when set, also enables the `Secure` flag. Use `.btsv.space` in production; leave empty in dev |
 
 ## Security
 
 - **Passwords** — hashed with bcrypt (default cost), never stored in plaintext
-- **Sessions** — 256-bit random tokens, 7-day expiry, stored server-side in SQLite
-- **Session cookies** — `HttpOnly`, `SameSite=Lax`, no `Secure` in dev (add for production)
+- **Sessions** — 256-bit random tokens, 14-day expiry, stored server-side in SQLite
+- **Session cookies** — `HttpOnly`, `SameSite=Strict`, `Secure` enabled when `COOKIE_DOMAIN` is set
 - **Git tokens** — encrypted with AES-GCM before writing to SQLite. Decrypted only when
   requested by an authenticated user. Key derived from `ENCRYPTION_KEY` env var (auto-
   generated with a warning if unset, meaning tokens won't survive restarts)

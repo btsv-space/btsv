@@ -23,6 +23,7 @@ services:
       DATA_DIR: /data
       ALLOW_ORIGIN: https://app.btsv.space
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      COOKIE_DOMAIN: .btsv.space
     volumes:
       - api-data:/data
 

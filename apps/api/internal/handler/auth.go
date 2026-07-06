@@ -45,11 +45,17 @@ func checkRateLimit(ip string) bool {
 }
 
 type AuthHandler struct {
-	db *store.DB
+	db           *store.DB
+	cookieDomain string
+	cookieSecure bool
 }
 
-func NewAuthHandler(db *store.DB) *AuthHandler {
-	return &AuthHandler{db: db}
+func NewAuthHandler(db *store.DB, cookieDomain string) *AuthHandler {
+	return &AuthHandler{
+		db:           db,
+		cookieDomain: cookieDomain,
+		cookieSecure: cookieDomain != "",
+	}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +98,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, session.Token, session.Expires)
+	setSessionCookie(w, session.Token, session.Expires, h.cookieDomain, h.cookieSecure)
 	writeJSON(w, http.StatusCreated, user)
 }
 
@@ -129,7 +135,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	setSessionCookie(w, session.Token, session.Expires)
+	setSessionCookie(w, session.Token, session.Expires, h.cookieDomain, h.cookieSecure)
 
 	resp := model.LoginResponse{
 		User:         *user,
@@ -145,7 +151,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		_ = h.db.DeleteSession(cookie.Value)
 	}
 
-	http.SetCookie(w, &http.Cookie{
+	c := &http.Cookie{
 		Name:     "session",
 		Value:    "",
 		Path:     "/",
@@ -153,7 +159,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-	})
+		Secure:   h.cookieSecure,
+	}
+	if h.cookieDomain != "" {
+		c.Domain = h.cookieDomain
+	}
+	http.SetCookie(w, c)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -220,15 +231,20 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func setSessionCookie(w http.ResponseWriter, token string, expires time.Time) {
-	http.SetCookie(w, &http.Cookie{
+func setSessionCookie(w http.ResponseWriter, token string, expires time.Time, domain string, secure bool) {
+	c := &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
 		Expires:  expires,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-	})
+		Secure:   secure,
+	}
+	if domain != "" {
+		c.Domain = domain
+	}
+	http.SetCookie(w, c)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

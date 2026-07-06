@@ -198,6 +198,7 @@ builds instead of Docker.
 | `PORT` | api & proxy env vars | Internal listen port |
 | `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
+| `COOKIE_DOMAIN` | api env var | Session cookie domain; when set, also enables the `Secure` flag. Use `.btsv.space` in production; leave empty in dev |
 
 
 ## Submodules

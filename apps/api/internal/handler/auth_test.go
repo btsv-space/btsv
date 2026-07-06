@@ -13,12 +13,17 @@ import (
 
 func setupTest(t *testing.T) (*store.DB, *AuthHandler) {
 	t.Helper()
+	return setupTestWithDomain(t, "")
+}
+
+func setupTestWithDomain(t *testing.T, domain string) (*store.DB, *AuthHandler) {
+	t.Helper()
 	db, err := store.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close() })
-	return db, NewAuthHandler(db)
+	return db, NewAuthHandler(db, domain)
 }
 
 func registerUser(t *testing.T, handler *AuthHandler) (sessionCookie string, userID string) {
@@ -250,6 +255,65 @@ func TestCookieSameSiteStrict(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("no session cookie in response")
+	}
+}
+
+func TestCookieSecureAndDomainProduction(t *testing.T) {
+	_, handler := setupTestWithDomain(t, ".btsv.space")
+
+	body := `{"username":"prodtls","password":"password123","encryptedDek":"AAECAwQFBgcICQoLDA0ODw==","kekSalt":"AAECAwQFBgcICQoLDA0ODw=="}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.Register(w, req)
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("register failed: %d", resp.StatusCode)
+	}
+
+	var found bool
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			found = true
+			if !c.Secure {
+				t.Fatal("expected Secure flag in production cookie")
+			}
+			if c.Domain != "btsv.space" {
+				t.Fatalf("expected Domain='btsv.space', got '%s'", c.Domain)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no session cookie in response")
+	}
+}
+
+func TestCookieSecureAndDomainDev(t *testing.T) {
+	_, handler := setupTestWithDomain(t, "")
+
+	body := `{"username":"devtls","password":"password123","encryptedDek":"AAECAwQFBgcICQoLDA0ODw==","kekSalt":"AAECAwQFBgcICQoLDA0ODw=="}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.Register(w, req)
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("register failed: %d", resp.StatusCode)
+	}
+
+	for _, c := range resp.Cookies() {
+		if c.Name == "session" {
+			if c.Secure {
+				t.Fatal("expected no Secure flag in dev cookie")
+			}
+			if c.Domain != "" {
+				t.Fatalf("expected no Domain in dev cookie, got '%s'", c.Domain)
+			}
+		}
 	}
 }
 

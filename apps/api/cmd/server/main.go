@@ -36,7 +36,8 @@ func main() {
 	}
 	defer db.Close()
 
-	authHandler := handler.NewAuthHandler(db)
+	cookieDomain := os.Getenv("COOKIE_DOMAIN")
+	authHandler := handler.NewAuthHandler(db, cookieDomain)
 	projectHandler := handler.NewProjectHandler()
 	prefsHandler := handler.NewPreferencesHandler(db)
 

@@ -115,7 +115,7 @@ func (db *DB) CreateSession(userID string) (*model.Session, error) {
 	session := &model.Session{
 		Token:   token,
 		UserID:  userID,
-		Expires: time.Now().Add(7 * 24 * time.Hour),
+		Expires: time.Now().Add(14 * 24 * time.Hour),
 	}
 
 	_, err := db.conn.Exec(
