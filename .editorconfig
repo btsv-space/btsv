@@ -8,8 +8,8 @@ charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
 
-[*.{yml,yaml,json,css,scss,svelte}]
-indent_style = tab
+[*.{js,ts,mjs,cjs,jsx,tsx,json,jsonc,css,scss,html,svelte,yml,yaml}]
+indent_style = space
 indent_size = 2
 
 [*.md]

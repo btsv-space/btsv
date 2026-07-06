@@ -6,6 +6,7 @@
   let dismissed = $state(false);
 
   function handleReload() {
+    console.debug("Reloading app to update.");
     dismissed = false;
     updateServiceWorker(true);
   }
