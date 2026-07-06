@@ -7,6 +7,7 @@ services:
         VITE_PROXY_URL: https://proxy.btsv.space
     ports:
       - "8103:80"
+    restart: unless-stopped
     depends_on:
       - api
       - proxy
@@ -16,6 +17,7 @@ services:
       context: ./apps/api
     ports:
       - "8101:8101"
+    restart: unless-stopped
     environment:
       PORT: "8101"
       DATA_DIR: /data
@@ -29,6 +31,7 @@ services:
       context: ./apps/proxy
     ports:
       - "8102:8102"
+    restart: unless-stopped
     environment:
       PORT: "8102"
       ALLOW_ORIGIN: https://app.btsv.space
