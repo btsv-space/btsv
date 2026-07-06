@@ -7,7 +7,7 @@
   import { encryptToken, bytesToApi } from "$lib/crypto";
   import { getDEK, gitTokenCache } from "$lib/stores/auth.svelte";
   import type { TProjectEntry } from "$lib/shared/types";
-  import { FolderPlus, Wrench } from "@lucide/svelte";
+  import { FolderPlus, Wrench, Check } from "@lucide/svelte";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import GitTokenField from "$lib/components/GitTokenField.svelte";
@@ -18,6 +18,7 @@
   let showCreateForm = $derived(page.url.searchParams.get("new") === "true");
   let formError = $state("");
   let formSubmitting = $state(false);
+  let saved = $state(false);
   let name = $state("");
   let repoUrl = $state("");
   let gitToken = $state("");
@@ -96,8 +97,11 @@
     const projectId = await createProject(displayName, repoUrl, gitToken);
 
     if (projectId) {
-      resetForm();
-      goto(`/${projectId}`);
+      saved = true;
+      setTimeout(() => {
+        resetForm();
+        goto(`/${projectId}`);
+      }, 600);
     }
   }
 </script>
@@ -160,8 +164,19 @@
       >
         Cancel
       </button>
-      <button type="submit" class="btn-primary" disabled={formSubmitting}>
-        {formSubmitting ? "Creating & cloning..." : "Create & Clone"}
+      <button
+        type="submit"
+        class="btn-primary flex items-center gap-1"
+        class:bg-green-600={saved}
+        disabled={formSubmitting || saved}
+      >
+        {#if saved}
+          <Check class="w-4 h-4" /> Saved
+        {:else if formSubmitting}
+          Creating & cloning...
+        {:else}
+          Create & Clone
+        {/if}
       </button>
     </div>
   </form>
