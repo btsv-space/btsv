@@ -3,8 +3,7 @@
   import {
     isAuthenticated,
     ensureInit,
-    currentUser,
-    dek,
+    persistAuth,
   } from "$lib/stores/auth.svelte";
   import { api } from "$lib/api";
   import {
@@ -12,15 +11,12 @@
     deriveKEK,
     wrapDEK,
     unwrapDEK,
-    dekToBase64,
     bytesFromApi,
     bytesToApi,
   } from "$lib/crypto";
   import { IV_LENGTH } from "$lib/shared/constants";
   import { ERoute } from "$lib/shared/types";
   import { onMount } from "svelte";
-
-  const DEK_KEY = "btsv_dek";
 
   console.log("[/login] mounted");
 
@@ -49,10 +45,7 @@
     const kek = await deriveKEK(pwd, kekSalt);
     const plainDek = await unwrapDEK(encryptedDek, iv, kek);
 
-    sessionStorage.setItem(DEK_KEY, dekToBase64(plainDek));
-    dek.value = plainDek;
-    currentUser.value = result.user;
-    isAuthenticated.value = true;
+    persistAuth(result.user, plainDek);
     goto(ERoute.HOME, { replaceState: true });
   }
 
@@ -73,10 +66,7 @@
       kekSalt: bytesToApi(kekSalt),
     });
 
-    sessionStorage.setItem(DEK_KEY, dekToBase64(plainDek));
-    dek.value = plainDek;
-    currentUser.value = user;
-    isAuthenticated.value = true;
+    persistAuth(user, plainDek);
     goto(ERoute.HOME, { replaceState: true });
   }
 

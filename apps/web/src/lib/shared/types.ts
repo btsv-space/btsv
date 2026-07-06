@@ -39,6 +39,11 @@ export interface IUser {
   username: string;
 }
 
+export interface IStoredAuth {
+  dek: string;
+  user: IUser | null;
+}
+
 export interface IProject {
   id: string;
   name: string;

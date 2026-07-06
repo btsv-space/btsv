@@ -1,15 +1,17 @@
-const STORAGE_KEY = "btsv:projectCommits";
+import { PROJECT_COMMITS_STORAGE_KEY } from "$lib/shared/constants";
 
 function read(): Record<string, number> {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}");
+    return JSON.parse(
+      localStorage.getItem(PROJECT_COMMITS_STORAGE_KEY) ?? "{}",
+    );
   } catch {
     return {};
   }
 }
 
 function write(data: Record<string, number>): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  localStorage.setItem(PROJECT_COMMITS_STORAGE_KEY, JSON.stringify(data));
 }
 
 export function getProjectCommits(): Record<string, number> {

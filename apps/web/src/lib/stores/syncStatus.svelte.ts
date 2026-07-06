@@ -1,8 +1,7 @@
 import { SvelteMap } from "svelte/reactivity";
 import { dbGetDirtyPosts } from "$lib/db";
 import { ESyncState, type ISyncStatus } from "$lib/shared/types";
-
-const STORAGE_KEY = "btsv:syncStatus";
+import { SYNC_STATUS_STORAGE_KEY } from "$lib/shared/constants";
 
 class SyncStatusStore {
   private map = this.#load();
@@ -51,7 +50,7 @@ class SyncStatusStore {
       return map;
     }
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(SYNC_STATUS_STORAGE_KEY);
       if (!raw) {
         return map;
       }
@@ -85,7 +84,7 @@ class SyncStatusStore {
     }
     try {
       if (this.map.size === 0) {
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(SYNC_STATUS_STORAGE_KEY);
         return;
       }
       // Strip `dirty` — it is in-memory only, recomputed on load.
@@ -95,7 +94,7 @@ class SyncStatusStore {
           { state: e.state, errorMsg: e.errorMsg },
         ]),
       );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(SYNC_STATUS_STORAGE_KEY, JSON.stringify(data));
     } catch {
       // ignore storage errors
     }

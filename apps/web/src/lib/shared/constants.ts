@@ -1,4 +1,7 @@
 export const APP_NAMESPACE = "btsv";
+export const AUTH_STORAGE_KEY = `${APP_NAMESPACE}:auth`;
+export const SYNC_STATUS_STORAGE_KEY = `${APP_NAMESPACE}:syncStatus`;
+export const PROJECT_COMMITS_STORAGE_KEY = `${APP_NAMESPACE}:projectCommits`;
 export const FS_DB_NAME = "btsv_fs";
 
 export const PROJECTS_DIR = "/projects";
