@@ -116,6 +116,49 @@ make build
 make lint
 ```
 
+## Deployment (Docker)
+
+The three services are dockerized for production deployment:
+
+| Service | Image | Port | Domain |
+|---|---|---|---|
+| **Web** | nginx (static SPA) | `8100` | `app.btsv.space` |
+| **API** | Go binary on alpine | `8101` | `api.btsv.space` |
+| **Proxy** | Go binary on alpine | `8102` | `proxy.btsv.space` |
+
+### Prerequisites
+
+- Docker & Docker Compose
+
+### Build & run
+
+```sh
+# Set the API encryption key (32 bytes, hex-encoded)
+export ENCRYPTION_KEY=$(openssl rand -hex 32)
+
+docker compose up --build
+```
+
+The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
+unset it's auto-generated on first startup — but a fixed value is needed to
+keep existing tokens decryptable across restarts.
+
+### Environment
+
+Production domain URLs (`VITE_API_URL`, `VITE_PROXY_URL`, `ALLOW_ORIGIN`) are
+set as Docker build args and environment variables in `docker-compose.yml`.
+Update `.env.production` if you run `make start` locally with production
+builds instead of Docker.
+
+| Variable | Set in | Purpose |
+|---|---|---|
+| `VITE_API_URL` | web build arg | API base URL baked into the SPA bundle |
+| `VITE_PROXY_URL` | web build arg | Git CORS proxy URL baked into the SPA bundle |
+| `ALLOW_ORIGIN` | api & proxy env vars | CORS origin header (the web app's domain) |
+| `PORT` | api & proxy env vars | Internal listen port |
+| `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
+| `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
+
 ## Submodules
 
 Builder templates live as git submodules under `builder-templates/`. Each is an
