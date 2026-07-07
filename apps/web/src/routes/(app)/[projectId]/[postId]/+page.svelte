@@ -42,6 +42,7 @@
       return;
     }
     await syncer.commitDeletion(project, id);
+    await syncer.push(project);
   }
 
   let workingPost = $state<IPostRecord | null>(null);
