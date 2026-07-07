@@ -3,8 +3,8 @@ services:
     build:
       context: ./apps/web
       args:
-        VITE_API_URL: https://api.example.com/api
-        VITE_PROXY_URL: https://proxy.example.com
+        VITE_API_URL: ${VITE_API_URL:-https://api.example.com/api}
+        VITE_PROXY_URL: ${VITE_PROXY_URL:-https://proxy.example.com}
     ports:
       - "8103:80"
     restart: unless-stopped
@@ -20,10 +20,10 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8101"
-      DATA_DIR: /data
-      ALLOW_ORIGIN: https://app.example.com
+      DATA_DIR: ${DATA_DIR:-/data}
+      ALLOW_ORIGIN: ${ALLOW_ORIGIN:-https://app.example.com}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      COOKIE_DOMAIN: .example.com
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-.example.com}
     volumes:
       - api-data:/data
 
@@ -35,8 +35,8 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8102"
-      ALLOW_ORIGIN: https://app.example.com
-      LOG_LEVEL: info
+      ALLOW_ORIGIN: ${ALLOW_ORIGIN:-https://app.example.com}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
 
 
 volumes:
