@@ -18,7 +18,7 @@ function extractExtra(data: Record<string, unknown>): Record<string, unknown> {
   const extra: Record<string, unknown> = {};
   for (const key of Object.keys(data)) {
     if (!KNOWN_KEYS.has(key)) {
-      extra[key] = data[key];
+      if (data[key] !== undefined) extra[key] = data[key];
     }
   }
   return extra;
@@ -50,8 +50,13 @@ export function parseMdx(raw: string, id: string): TParsedPost {
 }
 
 export function serializeMdx(post: IPostRecord): string {
+  const cleanExtra: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(post.extra ?? {})) {
+    if (v !== undefined) cleanExtra[k] = v;
+  }
+
   const fm: BtsvPostFrontmatter & Record<string, unknown> = {
-    ...post.extra,
+    ...cleanExtra,
     title: post.title,
     id: post.id,
     dateCreated: post.dateCreated,
@@ -59,14 +64,17 @@ export function serializeMdx(post: IPostRecord): string {
     description: post.description,
     tags: post.tags,
     draft: post.draft,
-    page: post.page,
   };
 
+  // any new fields added need to conform to this shape for backward-compat
   if (post.slug) {
     fm.slug = post.slug;
   }
   if (post.datePublished) {
     fm.datePublished = post.datePublished;
+  }
+  if (post.page !== undefined) {
+    fm.page = post.page;
   }
 
   return matter.stringify(post.body, fm);
