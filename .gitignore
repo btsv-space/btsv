@@ -44,4 +44,4 @@ TODO
 .env*
 
 # working docs and design plans
-apps/web/.design-docs
+.design-docs
