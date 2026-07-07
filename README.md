@@ -13,10 +13,10 @@ to Netlify or Cloudflare.
 │   Editor SPA │     │    proxy)   │     │  Auth +     │     │  Astro SSG) │
 │              │◀────│             │◀────│  secrets    │     │             │
 └──────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-     local-first                ▲               │                     ▲
-     IndexedDB +                │               │                     │
-     isomorphic-git ─ ─ ─ ─ ─ ─ │─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
-                                │                stored PAT
+     local-first                               │                     ▲
+     IndexedDB +                               │                     │
+     isomorphic-git ─ ─ ─ ─ ─ ─ ─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
+                                                  stored PAT
 ```
 
 | Layer | Component | Description |
@@ -24,7 +24,6 @@ to Netlify or Cloudflare.
 | **Frontend** | `apps/web` | SvelteKit 5, adapter-static SPA, Svelte 5 runes, local-first PWA |
 | **Backend** | `apps/api` | Go + chi, SQLite, username/password auth, encrypted token storage |
 | **Proxy** | `apps/proxy` | Go CORS proxy for Git remote API calls |
-
 | **Storage** | Git repos | Content repos per user/project; isomorphic-git pushes from the browser |
 | **Publish** | `builder-templates/` | SSG templates (submodules) — users fork and connect to a provider |
 
@@ -127,7 +126,6 @@ The three services are dockerized for production deployment:
 | **Web** | nginx (static SPA) | `8103` | `app.example.com` |
 | **API** | Go binary on alpine | `8101` | `api.example.com` |
 | **Proxy** | Go binary on alpine | `8102` | `proxy.example.com` |
-
 
 ### Prerequisites
 
