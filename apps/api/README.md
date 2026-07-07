@@ -86,7 +86,7 @@ golangci-lint run ./...
 | `PORT` | `8080` | Server listen port |
 | `DATA_DIR` | `./data` | SQLite database directory |
 | `ENCRYPTION_KEY` | generated on startup | 32-byte key for AES-GCM token encryption. Set a fixed value for persistence across restarts. |
-| `COOKIE_DOMAIN` | — | Session cookie domain; when set, also enables the `Secure` flag. Use `.btsv.space` in production; leave empty in dev |
+| `COOKIE_DOMAIN` | — | Session cookie domain; when set, also enables the `Secure` flag. Use `.example.com` in production; leave empty in dev |
 
 ## Security
 

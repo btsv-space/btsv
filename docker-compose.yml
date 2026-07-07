@@ -3,8 +3,8 @@ services:
     build:
       context: ./apps/web
       args:
-        VITE_API_URL: https://api.btsv.space/api
-        VITE_PROXY_URL: https://proxy.btsv.space
+        VITE_API_URL: https://api.example.com/api
+        VITE_PROXY_URL: https://proxy.example.com
     ports:
       - "8103:80"
     restart: unless-stopped
@@ -21,9 +21,9 @@ services:
     environment:
       PORT: "8101"
       DATA_DIR: /data
-      ALLOW_ORIGIN: https://app.btsv.space
+      ALLOW_ORIGIN: https://app.example.com
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      COOKIE_DOMAIN: .btsv.space
+      COOKIE_DOMAIN: .example.com
     volumes:
       - api-data:/data
 
@@ -35,23 +35,9 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8102"
-      ALLOW_ORIGIN: https://app.btsv.space
+      ALLOW_ORIGIN: https://app.example.com
       LOG_LEVEL: info
 
-
-    build:
-
-    ports:
-      - "8104:8104"
-    environment:
-      PORT: "8104"
-
-      REPO_DIR: /repo
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/repo
-      - ${HOME}/.ssh:/root/.ssh:ro
-    restart: unless-stopped
 
 volumes:
   api-data:

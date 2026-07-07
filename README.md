@@ -17,11 +17,6 @@ to Netlify or Cloudflare.
      IndexedDB +                │               │                     │
      isomorphic-git ─ ─ ─ ─ ─ ─ │─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
                                 │                stored PAT
-                                │
-                          ┌─────┴──────────┐
-
-
-                          └────────────────┘
 ```
 
 | Layer | Component | Description |
@@ -125,13 +120,13 @@ make lint
 
 ## Deployment (Docker)
 
-The four services are dockerized for production deployment:
+The three services are dockerized for production deployment:
 
 | Service | Image | Port | Domain |
 |---|---|---|---|
-| **Web** | nginx (static SPA) | `8103` | `app.btsv.space` |
-| **API** | Go binary on alpine | `8101` | `api.btsv.space` |
-| **Proxy** | Go binary on alpine | `8102` | `proxy.btsv.space` |
+| **Web** | nginx (static SPA) | `8103` | `app.example.com` |
+| **API** | Go binary on alpine | `8101` | `api.example.com` |
+| **Proxy** | Go binary on alpine | `8102` | `proxy.example.com` |
 
 
 ### Prerequisites
@@ -144,44 +139,12 @@ The four services are dockerized for production deployment:
 # Generate secrets and add them to .env.production
 echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.production
 
-
 docker compose --env-file .env.production up --build -d
 ```
 
 The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
 unset it's auto-generated on first startup — but a fixed value is needed to
 keep existing tokens decryptable across restarts.
-
-
-
-
-
-
-
-when `main` is updated.
-
-**Setup:**
-
-
-   mounts `~/.ssh` for `git fetch` auth).
-
-
-
-    | Field | Value |
-    |---|---|
-
-    | Content type | `application/json` |
-
-    | SSL verification | Enable (Cloudflare terminates TLS) |
-    | Events | Just the push event |
-
-
-   to your server's IP, with the proxy (orange cloud) enabled. Cloudflare
-   handles TLS termination and forwards HTTPS requests as plain HTTP to the
-
-
-4. Run `docker compose --env-file .env.production up --build -d`. On each push
-
 
 ### Environment
 
@@ -198,7 +161,7 @@ builds instead of Docker.
 | `PORT` | api & proxy env vars | Internal listen port |
 | `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
-| `COOKIE_DOMAIN` | api env var | Session cookie domain; when set, also enables the `Secure` flag. Use `.btsv.space` in production; leave empty in dev |
+| `COOKIE_DOMAIN` | api env var | Session cookie domain; when set, also enables the `Secure` flag. Use `.example.com` in production; leave empty in dev |
 
 
 ## Submodules
@@ -305,7 +268,7 @@ The API base URL defaults to `http://localhost:8080/api` and can be overridden w
   or generated on startup)
 - Tokens are transmitted only over authenticated API calls, used in-memory by the
   frontend, and never written to `localStorage` or IndexedDB
-- Session cookies are `HttpOnly`, `SameSite=Lax`, random 256-bit tokens with 7-day expiry
+- Session cookies are `HttpOnly`, `SameSite=Strict`, random 256-bit tokens with 14-day expiry
 
 ## Project structure
 
