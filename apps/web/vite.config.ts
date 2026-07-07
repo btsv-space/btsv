@@ -27,8 +27,8 @@ export default defineConfig({
         name: "btsv",
         short_name: "btsv",
         description: "Local-first markdown+ editor with git sync",
-        theme_color: "#ffffff",
-        background_color: "#ffffff",
+        theme_color: "#f7f7f7",
+        background_color: "#f7f7f7",
         display: "standalone",
         start_url: "/",
         icons: [

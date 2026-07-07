@@ -325,7 +325,7 @@
           <span class={isWriteMode ? "max-md:hidden" : ""}>Content</span>
           <textarea
             bind:value={workingPost.body}
-            class="w-full min-h-100 px-4 py-3 border border-input rounded-md text-sm font-mono bg-background text-foreground resize-y leading-relaxed max-md:flex-1 max-md:min-h-0"
+            class="w-full min-h-100 px-4 py-3 border border-input rounded-md text-sm font-mono text-foreground resize-y leading-relaxed max-md:flex-1 max-md:min-h-0"
           ></textarea>
         </label>
       </div>
@@ -342,7 +342,7 @@
             type="text"
             bind:value={workingPost.title}
             onblur={handleTitleBlur}
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
 
@@ -356,7 +356,7 @@
             onblur={() => {
               workingPost!.slug = deriveSlug(workingPost!.slug);
             }}
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
 
@@ -367,7 +367,7 @@
           <input
             type="date"
             bind:value={workingPost.datePublished}
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
 
@@ -378,7 +378,7 @@
           <textarea
             bind:value={workingPost.description}
             rows="3"
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground resize-y"
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground resize-y"
           ></textarea>
         </label>
 
@@ -390,7 +390,7 @@
             type="text"
             bind:value={tagsInput}
             placeholder="tag1, tag2"
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
         <label class="flex flex-row items-center gap-2 cursor-pointer">
