@@ -232,7 +232,7 @@
               {:else}
                 <span
                   title="Draft"
-                  class="text-xs h-6 w-5 font-serif italic aspect-square px-1.5 py-1 bg-muted-foreground/10 absolute top-0 right-0 bevel z-5 rounded-bl"
+                  class="text-xs h-5.5 w-5 font-serif italic text-center pb-1 flex items-end justify-center bg-muted-foreground/10 absolute top-0 right-2 bevel z-5 rounded-b-full"
                 >
                   d
                 </span>
@@ -240,9 +240,9 @@
               {#if post.page}
                 <span
                   title="Page"
-                  class="text-xs h-6 w-5 font-serif italic aspect-square px-1.5 py-1 bg-muted-foreground/10 absolute top-0 bevel z-5 rounded-bl {!post.draft
-                    ? 'right-0'
-                    : 'right-6 rounded-br'}"
+                  class="text-xs h-5.5 w-5 font-serif italic text-center pb-1 flex items-start justify-center bg-primary/50 text-primary-foreground absolute top-0 bevel z-5 rounded-b-full {!post.draft
+                    ? 'right-2'
+                    : 'right-8'}"
                 >
                   p
                 </span>
