@@ -99,6 +99,7 @@
       description: "",
       tags: [],
       draft: true,
+      page: false,
       body: "",
       extra: {},
       dirty: 0,
@@ -234,6 +235,14 @@
                   class="text-xs font-serif italic aspect-square px-1.5 py-1 bg-muted-foreground/10 absolute top-0 right-0 bevel z-5 rounded-bl"
                 >
                   d
+                </span>
+              {/if}
+              {#if post.page}
+                <span
+                  title="Page"
+                  class="text-xs font-serif italic aspect-square px-1.5 py-1 bg-primary/10 absolute top-0 bevel z-5 {!post.draft ? 'right-0 rounded-bl' : 'right-6'}"
+                >
+                  p
                 </span>
               {/if}
               {#if post.tags.length > 0}

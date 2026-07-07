@@ -106,6 +106,7 @@ function makeDirtyPost(overrides: Partial<IPostRecord> = {}): IPostRecord {
     description: "",
     tags: [],
     draft: false,
+    page: false,
     body: "Some content",
     extra: {},
     dirty: 1,

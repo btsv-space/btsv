@@ -18,6 +18,7 @@ function makePost(
     description: "",
     tags: [],
     draft: false,
+    page: false,
     body: "",
     extra: {},
     dirty: 0,

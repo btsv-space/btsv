@@ -148,6 +148,7 @@ export interface IPostRecord extends BtsvPostFrontmatter {
   description: string;
   tags: string[];
   draft: boolean;
+  page: boolean;
   body: string;
   extra: Record<string, unknown>;
   dirty: 0 | 1;
@@ -245,6 +246,7 @@ const FRONTMATTER_FIELDS = {
   draft: true,
   id: true,
   slug: true,
+  page: true,
 } as const satisfies Record<keyof BtsvPostFrontmatter, true>;
 
 export const KNOWN_KEYS = new Set(Object.keys(FRONTMATTER_FIELDS));
@@ -256,6 +258,7 @@ export const CONTENT_KEYS = {
   description: true,
   tags: true,
   draft: true,
+  page: true,
   body: true,
   extra: true,
   deleted: true,

@@ -43,6 +43,7 @@ export function parseMdx(raw: string, id: string): TParsedPost {
       ? fm.tags.filter((t: unknown) => typeof t === "string")
       : [],
     draft: Boolean(fm.draft),
+    page: Boolean(fm.page),
     body: content.trim(),
     extra,
   };
@@ -58,6 +59,7 @@ export function serializeMdx(post: IPostRecord): string {
     description: post.description,
     tags: post.tags,
     draft: post.draft,
+    page: post.page,
   };
 
   if (post.slug) {

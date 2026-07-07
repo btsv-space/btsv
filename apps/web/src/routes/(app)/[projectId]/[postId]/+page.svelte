@@ -392,7 +392,14 @@
             class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
           />
         </label>
-
+        <label class="flex flex-row items-center gap-2 cursor-pointer">
+          <Switch
+            checked={workingPost.page}
+            onCheckedChange={(v) => (workingPost!.page = v)}
+            class="my-1"
+          />
+          <span class="text-sm text-muted-foreground">Page</span>
+        </label>
         <label class="flex flex-row items-center gap-2 cursor-pointer">
           <Switch
             checked={!workingPost.draft}

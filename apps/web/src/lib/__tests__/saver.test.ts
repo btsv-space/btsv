@@ -22,6 +22,7 @@ function makePost(overrides: Partial<IPostRecord> = {}): IPostRecord {
     description: "A test post",
     tags: ["tag1", "tag2"],
     draft: false,
+    page: false,
     body: "Some content",
     extra: {},
     dirty: 0,

@@ -45,4 +45,8 @@ export interface BtsvPostFrontmatter {
    * URL slug for the published post. Auto-derived from title. Can be overridden. Required for publishing.
    */
   slug?: string;
+  /**
+   * If true, marks this entry as a standalone page (About, Contact, etc.) rather than a blog post. Pages are excluded from post listings and RSS.
+   */
+  page?: boolean;
 }
