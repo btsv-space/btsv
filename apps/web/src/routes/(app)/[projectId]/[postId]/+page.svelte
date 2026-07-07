@@ -223,7 +223,7 @@
             window.scrollTo(0, 0);
           }
           focusing = false;
-        }, 100);
+        }, 200);
       }
     }
 
