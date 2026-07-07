@@ -94,7 +94,7 @@
   style="height:{trackH}px;width:{trackW}px"
 >
   <span
-    class="absolute z-10 flex items-center justify-center bg-primary-foreground shadow-sm transition-transform duration-200 {knobRadius}"
+    class="absolute z-10 flex items-center justify-center bg-background shadow-sm transition-transform duration-200 {knobRadius}"
     style="height:{knobSize}px;width:{knobSize}px;left:{pad}px;transform:{checked
       ? `translateX(${travel}px)`
       : 'translateX(0)'}"
