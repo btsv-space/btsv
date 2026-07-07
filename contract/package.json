@@ -1,0 +1,12 @@
+{
+  "name": "btsv-contract",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate-template": "node generate-template.mjs"
+  },
+  "devDependencies": {
+    "json-schema-to-zod": "^2.6.1",
+    "prettier": "^3.4.0"
+  }
+}

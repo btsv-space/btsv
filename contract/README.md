@@ -1,13 +1,28 @@
 # btsv Content Contract
 
 The canonical contract between the editor and all builder templates. This is the
-single source of truth for what a post file looks like.
+single source of truth for what frontmatter fields a post has.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | `frontmatter.schema.json` | [JSON Schema](https://json-schema.org/) defining the frontmatter shape |
+| `generate-template.mjs` | Generates the Astro template's Zod schema from the JSON Schema |
+| `package.json` | Tooling: `pnpm generate-template` runs the generator |
+
+## Template generation
+
+The Astro template's `src/content.config.ts` imports a generated Zod schema
+(`posts.schema.generated.ts`) rather than maintaining one by hand.
+
+Run from `contract/`:
+```sh
+pnpm generate-template
+```
+
+This reads `frontmatter.schema.json` and writes:
+- `../builder-templates/btsv-template-astro/src/posts.schema.generated.ts`
 
 ## Post format
 
@@ -19,102 +34,70 @@ Posts are `.mdx` files stored in `src/content/posts/`. Each post has two section
 ### Core frontmatter fields
 
 Defined in `frontmatter.schema.json`. These fields have dedicated editor UI and are
-validated by all builder templates:
+validated by the template's Zod schema:
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `title` | `string` | yes | Post title |
-| `date` | `date` | yes | Publication date (`YYYY-MM-DD`) |
+| `dateCreated` | `date` | yes | Original creation date (`YYYY-MM-DD`) |
+| `dateUpdated` | `date` | yes | Last modification date (`YYYY-MM-DD`) |
+| `datePublished` | `date` | no | Publication date (`YYYY-MM-DD`) |
 | `description` | `string` | no | SEO/social preview |
 | `tags` | `string[]` | no | Tag list |
 | `draft` | `boolean` | no | Exclude from production builds |
+| `id` | `string` | no | Internal identifier (auto-generated) |
 | `slug` | `string` | no | Custom URL slug |
-| `updated` | `date` | no | Last modified date (`YYYY-MM-DD`) |
+| `page` | `boolean` | no | Standalone page (About, Contact), excluded from listings/RSS |
 
 ### Custom fields (escape hatch)
 
-The schema uses `additionalProperties: true`, meaning you can add **any extra fields**
-to your frontmatter. They pass through the editor untouched and are available in
-builder templates for custom use.
+Fields not listed in the schema pass through the editor untouched and are
+available in builder templates via `extra`:
 
 ```yaml
 ---
 title: 'My Post'
-date: 2025-06-01
+dateCreated: 2025-06-01
+dateUpdated: 2025-06-01
 series: 'Deep Dives'       # ← custom field
 readingTime: 12            # ← custom field
 ---
 ```
 
-The editor won't provide UI for custom fields, but it will preserve them when saving.
-Builder templates can read them from the frontmatter data:
+The editor preserves custom fields when saving. Builder templates can read them
+from the frontmatter `extra` record.
 
-```astro
----
-// Access in Astro
-const { series, readingTime } = post.data;
----
-```
-
-## Markdown+ features
-
-### Editor-only comments
-
-Lines starting with `@@` are stripped from the published output:
-
-```
-@@ This text appears in your editor but
-@@ never reaches the published page.
-@@@
-```
-
-### MDX components
-
-Builder templates ship with these components. Posts can use them by name:
-
-| Component | Usage |
-|---|---|
-| `<Callout type="info\|warning\|tip">` | Styled callout boxes |
-| `<Figure src="..." alt="..." caption="...">` | Captioned images |
 
 ## Consuming this schema
 
 ### In the Astro template
 
-`src/content.config.ts` uses Zod with `.passthrough()`:
+`src/content.config.ts` imports the generated schema:
 
 ```ts
-import { z } from 'astro/zod';
+import { defineCollection } from 'astro:content';
+import { glob } from 'astro/loaders';
+import { postsSchema } from './posts.schema.generated';
 
 const posts = defineCollection({
-  schema: z.object({
-    title: z.string(),
-    date: z.date(),
-    description: z.string().optional(),
-    tags: z.array(z.string()).default([]),
-    draft: z.boolean().default(false),
-    slug: z.string().optional(),
-    updated: z.date().optional(),
-  }).passthrough(),  // ← allows custom fields
+  loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/posts' }),
+  schema: postsSchema,
 });
+
+export const collections = { posts };
 ```
 
-### In Hugo
+### In the editor (apps/web)
 
-Hugo can validate frontmatter against the JSON Schema using a build script or
-pre-commit hook. Custom fields are accessible via `.Params.customFieldName`.
-
-### In the editor
-
-The editor reads `contract/frontmatter.schema.json` to know which fields to provide
-UI for. Unknown fields are preserved but not displayed in the editor sidebar.
+`apps/web/package.json` `generate` script runs `json2ts` over
+`frontmatter.schema.json` to produce typed TypeScript interfaces.
 
 ## Adding a new core field
 
-When a field graduates from "custom" to "core" (meaning it gets dedicated UI):
-
 1. Add it to `contract/frontmatter.schema.json`
-2. Update each builder template's schema config
-3. Add editor UI for the new field
+2. Run `pnpm generate-template` from `contract/`
+3. Run `pnpm generate` from `apps/web/`
+4. Update editor UI and parser in `apps/web/` to handle the new field
+5. Run `pnpm check` from `apps/web/` to verify type correctness
 
-Custom fields can always be used immediately without waiting for core field approval.
+Steps 1–3 handle the contract and template. Step 4 is manual (future work may make the editor UI dynamic from template contracts).
