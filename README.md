@@ -13,9 +13,9 @@ to Netlify or Cloudflare.
 │   Editor SPA │     │    proxy)   │     │  Auth +     │     │  Astro SSG) │
 │              │◀────│             │◀────│  secrets    │     │             │
 └──────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
-     local-first               ▲               │                    ▲
-     IndexedDB +               │               │                    │
-     isomorphic-git ─ ─ ─ ─ ─ ─│─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
+     local-first                ▲               │                     ▲
+     IndexedDB +                │               │                     │
+     isomorphic-git ─ ─ ─ ─ ─ ─ │─ git push ─ ─ ┘  with server- ─ ─ ─ ┘
                                 │                stored PAT
                                 │
                           ┌─────┴──────────┐
@@ -25,7 +25,7 @@ to Netlify or Cloudflare.
 ```
 
 | Layer | Component | Description |
-|---|---|---|---|
+|---|---|---|
 | **Frontend** | `apps/web` | SvelteKit 5, adapter-static SPA, Svelte 5 runes, local-first PWA |
 | **Backend** | `apps/api` | Go + chi, SQLite, username/password auth, encrypted token storage |
 | **Proxy** | `apps/proxy` | Go CORS proxy for Git remote API calls |
@@ -128,7 +128,7 @@ make lint
 The four services are dockerized for production deployment:
 
 | Service | Image | Port | Domain |
-|---|---|---|---|---|
+|---|---|---|---|
 | **Web** | nginx (static SPA) | `8103` | `app.btsv.space` |
 | **API** | Go binary on alpine | `8101` | `api.btsv.space` |
 | **Proxy** | Go binary on alpine | `8102` | `proxy.btsv.space` |
@@ -194,7 +194,7 @@ builds instead of Docker.
 |---|---|---|
 | `VITE_API_URL` | web build arg | API base URL baked into the SPA bundle |
 | `VITE_PROXY_URL` | web build arg | Git CORS proxy URL baked into the SPA bundle |
-    | `ALLOW_ORIGIN` | api, proxy env vars | CORS origin header (the web app's domain) |
+| `ALLOW_ORIGIN` | api, proxy env vars | CORS origin header (the web app's domain) |
 | `PORT` | api & proxy env vars | Internal listen port |
 | `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
