@@ -18,7 +18,7 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
-  import { dbGetPost } from "$lib/db";
+  import { dbGetPost, dbGetPostBySlug } from "$lib/db";
 
   const projectId = page.params.projectId!;
   const postId = page.params.postId!;
@@ -48,16 +48,19 @@
   let workingPost = $state<IPostRecord | null>(null);
   let tagsInput = $state("");
   let saveError = $state<{ title: string; message: string } | null>(null);
+  let slugError = $state("");
   let showDeleteConfirm = $state(false);
   let isWriteMode = $state(true);
   let containerEl: HTMLDivElement | undefined = $state();
 
   let saver: DebouncedSaver | null = null;
   let unregisterHook: (() => void) | null = null;
+  let workingSlug = $state("");
+  let lastCheckedSlug: string | undefined;
 
   $effect(() => {
     if (!workingPost) return;
-    void { ...workingPost, _t: tagsInput };
+    void { ...workingPost, _t: tagsInput, _s: workingSlug };
 
     // Validate: can't publish without a title
     if (!workingPost.draft && !workingPost.title.trim()) {
@@ -70,10 +73,41 @@
       };
     }
 
-    saver?.schedule();
+    const slug = deriveSlug(workingSlug);
+
+    if (slug === lastCheckedSlug) {
+      saver?.schedule();
+      return;
+    }
+
+    if (!slug) {
+      slugError = "";
+      lastCheckedSlug = slug;
+      workingPost!.slug = slug;
+      saver?.schedule();
+      return;
+    }
+
+    dbGetPostBySlug(projectId, slug).then((duplicateSlugPost) => {
+      if (slug !== deriveSlug(workingSlug)) return;
+      if (duplicateSlugPost && duplicateSlugPost.id !== workingPost!.id) {
+        slugError = "This slug is already used by another post.";
+        workingPost!.slug = lastCheckedSlug!;
+        saver?.schedule();
+        return;
+      }
+      slugError = "";
+      lastCheckedSlug = slug;
+      workingPost!.slug = slug;
+      saver?.schedule();
+    });
   });
 
   async function handleSave() {
+    if (slugError) {
+      saveError = { title: "Cannot Save", message: slugError };
+      return;
+    }
     if (saver) {
       await saver.flush();
     }
@@ -95,11 +129,8 @@
   }
 
   function handleTitleBlur() {
-    // Derive slug from title when slug is empty
-    if (!workingPost!.slug && workingPost!.title) {
-      untrack(() => {
-        workingPost!.slug = deriveSlug(workingPost!.title);
-      });
+    if (!workingSlug && workingPost!.title) {
+      workingSlug = deriveSlug(workingPost!.title);
     }
   }
 
@@ -133,6 +164,8 @@
     if (cachedPost) {
       workingPost = cachedPost;
       tagsInput = tagsArrToString(cachedPost.tags);
+      workingSlug = cachedPost.slug;
+      lastCheckedSlug = cachedPost.slug;
     }
     // pull from origin and load it
     const freshPost = await loadPost(projectId, postId, { forcePull: true });
@@ -141,8 +174,9 @@
       return;
     }
     workingPost = freshPost;
-
-    tagsInput = tagsArrToString(workingPost.tags);
+    tagsInput = tagsArrToString(freshPost.tags);
+    workingSlug = freshPost.slug;
+    lastCheckedSlug = freshPost.slug;
 
     let gitBaseline: IPostRecord | null = null;
     try {
@@ -285,7 +319,7 @@
           offIcon={PenLine}
           checked={!isWriteMode}
           onCheckedChange={() => (isWriteMode = !isWriteMode)}
-          size={9}
+          size={10}
           class="md:hidden"
           lengthMultiple={2}
         />
@@ -352,12 +386,19 @@
           <span>Slug</span>
           <input
             type="text"
-            bind:value={workingPost.slug}
+            bind:value={workingSlug}
             onblur={() => {
-              workingPost!.slug = deriveSlug(workingPost!.slug);
+              workingSlug = deriveSlug(workingSlug);
             }}
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
+            pattern="[a-z0-9]+(-[a-z0-9]+)*"
+            title="Use lowercase letters, numbers, and hyphens only."
+            class="px-3 py-2 border rounded-md text-sm font-inherit text-foreground
+              {slugError ? 'border-destructive' : 'border-input'}
+              invalid:border-destructive"
           />
+          {#if slugError}
+            <p class="text-destructive text-xs mt-1">{slugError}</p>
+          {/if}
         </label>
 
         <label

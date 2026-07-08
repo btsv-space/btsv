@@ -6,7 +6,7 @@ import type {
 } from "$lib/shared/types";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -60,6 +60,14 @@ function getDB(): Promise<IDBPDatabase> {
         if (oldVersion < 6) {
           if (db.objectStoreNames.contains("documents")) {
             db.deleteObjectStore("documents");
+          }
+        }
+        if (oldVersion < 7) {
+          const store = tx.objectStore("posts");
+          if (!store.indexNames.contains("by_project_slug")) {
+            store.createIndex("by_project_slug", ["projectId", "slug"], {
+              unique: false,
+            });
           }
         }
       },
@@ -129,6 +137,20 @@ export async function dbGetDirtyPosts(
   const dirty = await index.getAll(IDBKeyRange.only([projectId, 1]));
   await tx.done;
   return dirty;
+}
+
+export async function dbGetPostBySlug(
+  projectId: string,
+  slug: string,
+): Promise<IPostRecord | undefined> {
+  const db = await getDB();
+  const tx = db.transaction("posts", "readonly");
+  const index = tx.store.index("by_project_slug");
+  const matches: IPostRecord[] = await index.getAll(
+    IDBKeyRange.only([projectId, slug]),
+  );
+  await tx.done;
+  return matches.find((m) => !m.deleted);
 }
 
 // ── Projects cache ────────────────────────────────
