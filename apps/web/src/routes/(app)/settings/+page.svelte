@@ -67,52 +67,60 @@
   }
 </script>
 
-<div class="max-w-lg flex flex-col gap-6">
-  <span>
-    Logged in as <span class="font-mono px-1"
-      >{currentUser.value?.username}</span
-    >
-  </span>
-  <div class="card max-w-lg flex flex-col gap-6">
-    <label for="sync-type" class="text-[15px] font-semibold block"
-      >Sync Type
-      <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
-        Choose how posts are synced with Git repositories.
-      </p>
-      <select
-        id="sync-type"
-        bind:value={syncType}
-        onchange={handleChange}
-        disabled={saveState === "saving"}
-        class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+<div class="flex flex-col items-center">
+  <div class="w-full max-w-2xl flex flex-col gap-6">
+    <span>
+      Logged in as <span class="font-mono px-1"
+        >{currentUser.value?.username}</span
       >
-        <option value="git">Git (isomorphic via cors-proxy)</option>
-        <option value="api">API (GitHub REST)</option>
-      </select>
-    </label>
-    {#if syncType === "git"}
-      <label for="proxy-url" class="text-[15px] font-semibold block">
-        CORS Proxy URL
+    </span>
+    <div class="card flex flex-col gap-6">
+      <label for="sync-type" class="text-[15px] font-semibold block"
+        >Sync Type
         <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
-          Custom CORS proxy URL for isomorphic-git (default:
-          http://localhost:9999).
+          Choose how posts are synced with Git repositories.
         </p>
-        <input
-          id="proxy-url"
-          type="url"
-          bind:value={proxyUrl}
+        <select
+          id="sync-type"
+          bind:value={syncType}
           onchange={handleChange}
           disabled={saveState === "saving"}
-          placeholder="http://localhost:9999"
           class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
-        />
+        >
+          <option value="git">Git (isomorphic via cors-proxy)</option>
+          <option value="api">API (GitHub REST)</option>
+        </select>
       </label>
-    {/if}
+      {#if syncType === "git"}
+        <label for="proxy-url" class="text-[15px] font-semibold block">
+          CORS Proxy URL
+          <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
+            Custom CORS proxy URL for isomorphic-git (default:
+            http://localhost:9999).
+          </p>
+          <input
+            id="proxy-url"
+            type="url"
+            bind:value={proxyUrl}
+            onchange={handleChange}
+            disabled={saveState === "saving"}
+            placeholder="http://localhost:9999"
+            class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+          />
+        </label>
+      {/if}
+    </div>
+
+    <button class="btn-destructive text-base w-full" onclick={() => logout()}
+      >Logout</button
+    >
   </div>
 
-  <button class="btn-destructive text-base w-full" onclick={() => logout()}
-    >Logout</button
-  >
+  <footer class="text-xs text-muted-foreground/50 font-mono mt-8 text-center">
+    <span>{import.meta.env.VITE_GIT_COMMIT}</span>
+    &mdash;
+    <span>{import.meta.env.VITE_BUILD_TIME}</span>
+  </footer>
 </div>
 
 {#if saveState !== "idle"}

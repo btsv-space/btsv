@@ -5,6 +5,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-https://api.example.com/api}
         VITE_PROXY_URL: ${VITE_PROXY_URL:-https://proxy.example.com}
+        VITE_GIT_COMMIT: ${VITE_GIT_COMMIT:-unknown}
     ports:
       - "8103:80"
     restart: unless-stopped

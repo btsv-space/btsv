@@ -1,11 +1,25 @@
 import fs from "fs";
+import { execSync } from "child_process";
 import tailwindcss from "@tailwindcss/vite";
 import { sveltekit } from "@sveltejs/kit/vite";
 import { SvelteKitPWA } from "@vite-pwa/sveltekit";
 import { defineConfig } from "vite";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 
+function getGitCommit(): string {
+  if (process.env.VITE_GIT_COMMIT) return process.env.VITE_GIT_COMMIT;
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 export default defineConfig({
+  define: {
+    "import.meta.env.VITE_GIT_COMMIT": JSON.stringify(getGitCommit()),
+    "import.meta.env.VITE_BUILD_TIME": JSON.stringify(new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC"),
+  },
   server: {
     https:
       process.env.HTTPS_CERT && process.env.HTTPS_KEY
