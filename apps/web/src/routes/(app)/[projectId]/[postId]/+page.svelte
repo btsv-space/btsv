@@ -284,7 +284,7 @@
 
 <div
   bind:this={containerEl}
-  class="max-md:fixed inset-0 max-md:p-4 bg-background max-md:w-svw max-md:flex max-md:flex-col max-md:overflow-hidden"
+  class="max-md:fixed max-md:z-50 inset-0 max-md:p-4 bg-background max-md:w-svw max-md:flex max-md:flex-col max-md:overflow-hidden"
 >
   {#if !workingPost}
     <p class="text-muted-foreground mt-4">Loading post...</p>
