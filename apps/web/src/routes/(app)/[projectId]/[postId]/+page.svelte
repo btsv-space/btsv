@@ -446,6 +446,9 @@
             type="text"
             bind:value={tagsInput}
             placeholder="tag1, tag2"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck={false}
             class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
