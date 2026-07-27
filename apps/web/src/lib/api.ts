@@ -39,10 +39,10 @@ export const api = {
       });
     },
 
-    login(username: string, password: string) {
+    login(username: string, password: string, stayLoggedIn: boolean) {
       return request<ILoginResult>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, stayLoggedIn }),
       });
     },
 

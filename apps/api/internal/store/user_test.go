@@ -170,7 +170,7 @@ func TestCreateAndGetSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := db.CreateSession(user.ID)
+	session, err := db.CreateSession(user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestCreateSessionCapsAtMaxSessions(t *testing.T) {
 
 	sessions := make([]*model.Session, 12)
 	for i := 0; i < 12; i++ {
-		sessions[i], err = db.CreateSession(user.ID)
+		sessions[i], err = db.CreateSession(user.ID, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -266,7 +266,7 @@ func TestDeleteSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := db.CreateSession(user.ID)
+	session, err := db.CreateSession(user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,12 +293,12 @@ func TestDeleteUserSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s1, err := db.CreateSession(user.ID)
+	s1, err := db.CreateSession(user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	s2, err := db.CreateSession(user.ID)
+	s2, err := db.CreateSession(user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,12 +335,12 @@ func TestDeleteUserSessionsOnlyTargetUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	aliceSession, err := db.CreateSession(alice.ID)
+	aliceSession, err := db.CreateSession(alice.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	bobSession, err := db.CreateSession(bob.ID)
+	bobSession, err := db.CreateSession(bob.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func TestGetSessionExpired(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session, err := db.CreateSession(user.ID)
+	session, err := db.CreateSession(user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}

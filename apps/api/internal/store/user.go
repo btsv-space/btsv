@@ -108,17 +108,22 @@ func (db *DB) UpdatePassword(userID, newPassword string, encryptedDEK, kekSalt [
 
 const maxSessionsPerUser = 10
 
-func (db *DB) CreateSession(userID string) (*model.Session, error) {
+func (db *DB) CreateSession(userID string, stayLoggedIn bool) (*model.Session, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return nil, err
 	}
 	token := hex.EncodeToString(b)
 
+	expiry := 14 * 24 * time.Hour
+	if stayLoggedIn {
+		expiry = 365 * 24 * time.Hour
+	}
+
 	session := &model.Session{
 		Token:   token,
 		UserID:  userID,
-		Expires: time.Now().Add(14 * 24 * time.Hour),
+		Expires: time.Now().Add(expiry),
 	}
 
 	_, err := db.conn.Exec(

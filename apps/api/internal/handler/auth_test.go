@@ -134,7 +134,7 @@ func TestPasswordChangeInvalidatesOtherSessions(t *testing.T) {
 	sessionCookie, userID := registerUser(t, handler)
 
 	// Create another session directly via the store (simulates another device)
-	otherSession, err := db.CreateSession(userID)
+	otherSession, err := db.CreateSession(userID, false)
 	if err != nil {
 		t.Fatal(err)
 	}

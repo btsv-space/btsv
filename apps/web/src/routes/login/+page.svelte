@@ -23,6 +23,7 @@
   let mode: "login" | "register" = $state("login");
   let username = $state("");
   let password = $state("");
+  let stayLoggedIn = $state(false);
   let error = $state("");
   let loading = $state(false);
 
@@ -34,7 +35,7 @@
   });
 
   async function login(uname: string, pwd: string) {
-    const result = await api.auth.login(uname, pwd);
+    const result = await api.auth.login(uname, pwd, stayLoggedIn);
 
     const kekSalt = bytesFromApi(result.kekSalt);
     const blob = bytesFromApi(result.encryptedDek);
@@ -128,6 +129,17 @@
         class="px-3 py-2 border border-input rounded-md text-[15px] font-mono bg-background text-foreground"
       />
     </label>
+
+    {#if mode === "login"}
+      <label class="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+        <input
+          type="checkbox"
+          bind:checked={stayLoggedIn}
+          class="cursor-pointer"
+        />
+        <span>Stay logged in</span>
+      </label>
+    {/if}
 
     <button
       type="submit"

@@ -92,7 +92,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.db.CreateSession(user.ID)
+	session, err := h.db.CreateSession(user.ID, false)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
@@ -129,7 +129,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.db.CreateSession(user.ID)
+	session, err := h.db.CreateSession(user.ID, req.StayLoggedIn)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
