@@ -18,7 +18,9 @@ function getGitCommit(): string {
 export default defineConfig({
   define: {
     "import.meta.env.VITE_GIT_COMMIT": JSON.stringify(getGitCommit()),
-    "import.meta.env.VITE_BUILD_TIME": JSON.stringify(new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC"),
+    "import.meta.env.VITE_BUILD_TIME": JSON.stringify(
+      new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
+    ),
   },
   server: {
     https:
