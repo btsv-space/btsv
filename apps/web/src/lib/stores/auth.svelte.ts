@@ -79,10 +79,13 @@ function resetAuth(): void {
 }
 
 function isNetworkError(err: unknown): boolean {
-  return err instanceof TypeError && /fetch|network/i.test(err.message);
+  if (typeof navigator !== "undefined" && navigator.onLine === false)
+    return true;
+  return err instanceof TypeError && /fetch|network|load/i.test(err.message);
 }
 
 let initPromise: Promise<void> | null = null;
+let sessionCheckActive = false;
 
 async function init() {
   const stored = readStoredAuth();
@@ -97,24 +100,34 @@ async function init() {
     return resetAuth();
   }
 
-  let user: IUser | null = stored.user;
+  // trust local credentials immediately — don't block on the server
+  currentUser.value = stored.user;
+  isAuthenticated.value = true;
 
-  // check the session with the server when online.
+  // background-check the session with the server
+  sessionCheckActive = true;
+  verifySession();
+}
+
+async function verifySession(): Promise<void> {
   try {
     const me = await api.auth.me();
-    // server says not authenticated (shouldn't normally reach here because
-    // the middleware returns 401, but handle it defensively).
-    if (!me) return resetAuth();
-    user = me;
-    writeStoredAuth(dek.value, user);
+    if (!sessionCheckActive) return;
+    if (!me) {
+      teardownSession();
+      return;
+    }
+    currentUser.value = me;
+    if (dek.value) writeStoredAuth(dek.value, me);
   } catch (err) {
-    // session expired or another non-network error — force re-login.
-    if (!isNetworkError(err)) return resetAuth();
-    // offline — fall through and trust the locally stored credentials.
+    if (!sessionCheckActive) return;
+    // session expired or revoked — force re-login
+    if (!isNetworkError(err)) {
+      teardownSession();
+      return;
+    }
+    // offline — trust local credentials, do nothing
   }
-
-  currentUser.value = user;
-  isAuthenticated.value = true;
 }
 
 export function ensureInit() {
@@ -136,16 +149,23 @@ export function persistAuth(user: IUser, dekValue: Uint8Array): void {
   writeStoredAuth(dekValue, user);
 }
 
+function teardownSession(): void {
+  sessionCheckActive = false;
+  syncer.stop();
+  resetAuth();
+  gitTokenCache.clear();
+  projects.value = [];
+  syncStatus.clear();
+  prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
+  goto(ERoute.LOGIN, { replaceState: true });
+}
+
 export async function logout() {
   try {
     await api.auth.logout();
+  } catch {
+    // server unreachable — still tear down locally
   } finally {
-    syncer.stop();
-    resetAuth();
-    gitTokenCache.clear();
-    projects.value = [];
-    syncStatus.clear();
-    prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
-    goto(ERoute.LOGIN, { replaceState: true });
+    teardownSession();
   }
 }
