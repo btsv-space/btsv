@@ -280,11 +280,26 @@
       el.style.height = "";
     };
   });
+
+  onMount(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.width = "100%";
+    return () => {
+      html.style.overflow = "";
+      body.style.overflow = "";
+      body.style.position = "";
+      body.style.width = "";
+    };
+  });
 </script>
 
 <div
   bind:this={containerEl}
-  class="max-md:fixed max-md:z-50 inset-0 max-md:p-4 bg-background max-md:w-svw max-md:flex max-md:flex-col max-md:overflow-hidden"
+  class="max-md:fixed max-md:z-50 inset-0 max-md:p-4 bg-background max-md:w-svw max-md:flex max-md:flex-col max-md:overflow-hidden max-md:touch-none max-md:overscroll-none"
 >
   {#if !workingPost}
     <p class="text-muted-foreground mt-4">Loading post...</p>
@@ -359,7 +374,7 @@
           <span class={isWriteMode ? "max-md:hidden" : ""}>Content</span>
           <textarea
             bind:value={workingPost.body}
-            class="w-full min-h-100 px-4 py-3 border border-input rounded-md text-sm font-mono text-foreground resize-y leading-relaxed max-md:flex-1 max-md:min-h-0"
+            class="w-full min-h-100 px-4 py-3 border border-input rounded-md text-sm font-mono text-foreground resize-y leading-relaxed max-md:flex-1 max-md:min-h-0 max-md:overscroll-none"
           ></textarea>
         </label>
       </div>
@@ -468,3 +483,20 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  @media (max-width: 767px) {
+    input:focus,
+    textarea:focus {
+      animation: blink-opacity 0.01s;
+    }
+  }
+  @keyframes blink-opacity {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+</style>
