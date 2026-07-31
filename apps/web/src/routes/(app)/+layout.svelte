@@ -138,8 +138,12 @@
 
 {#if !sessionReady}
   <p class="text-center text-muted-foreground p-8">Checking session…</p>
-{:else if !isAuthenticated.value}{:else if !projectsReady}
-  <p class="text-center text-muted-foreground p-8">Loading projects...</p>
+{:else if !isAuthenticated.value}
+  <p class="text-center text-muted-foreground p-8">
+    Unauthenticated, redirecting to log in page…
+  </p>
+{:else if !projectsReady}
+  <p class="text-center text-muted-foreground p-8">Loading projects…</p>
 {:else}
   {@render children()}
 {/if}
