@@ -187,6 +187,7 @@ export interface ICurrentSaver {
 export interface ISyncerConfig {
   getPrefs: () => IUserPreferences;
   getProjects: () => TProjectEntry[];
+  canSync: () => boolean;
   isPostEditing?(projectId: string, postId: string): boolean;
   onSyncStatus?(
     projectId: string,

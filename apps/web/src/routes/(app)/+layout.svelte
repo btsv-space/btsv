@@ -3,7 +3,7 @@
   import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
   import { projects, getProject } from "$lib/stores/projects.svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
-  import { syncer } from "$lib/stores/syncer.svelte";
+  import { syncer, canSync } from "$lib/stores/syncer.svelte";
   import { checkProjectDirExists } from "$lib/fs";
   import { api } from "$lib/api";
   import { dbGetProjects, dbSaveProjects, dbSavePrefs } from "$lib/db";
@@ -13,6 +13,8 @@
   let { children } = $props();
   let sessionReady = $state(false);
   let projectsReady = $state(false);
+
+  let prefFetchGeneration = 0;
 
   async function projectEntryWithStatus(
     p: { id: string } & Partial<TProjectEntry>,
@@ -27,35 +29,65 @@
       error: "",
     } as TProjectEntry;
   }
+
   async function loadProjects() {
     // 1. Read from cache immediately so the UI never blinks
-    const cached = await dbGetProjects();
-    if (cached.length > 0) {
-      projects.value = await Promise.all(
-        cached.map((p) => projectEntryWithStatus(p)),
-      );
-    }
-
-    // 2. Wait for server preferences BEFORE anything triggers a pull
-    let apiPrefs: typeof prefs.value | undefined;
     try {
-      apiPrefs = await api.preferences.get();
-    } catch {
-      // prefs not available yet (e.g., new user) — keep defaults
-    }
-    if (apiPrefs) {
-      prefs.value = { ...prefs.value, ...apiPrefs };
-      await dbSavePrefs(prefs.value);
+      const cached = await dbGetProjects();
+      if (cached.length > 0) {
+        projects.value = await Promise.all(
+          cached.map((p) => projectEntryWithStatus(p)),
+        );
+      }
+    } catch (err) {
+      console.error("[/:layout] failed to load cached projects:", err);
     }
 
-    // 3. Now safe to show children (their onMount may trigger pulls)
+    // 2. Show UI immediately — don't wait for network
     projectsReady = true;
 
-    // 4. Start syncer with correct preferences
+    // 3. Start syncer — internal ops no-op until canSync is true
     syncer.start();
     console.log("[/:layout] syncer started");
 
-    // 5. Fetch fresh projects from API in background
+    // 4. Background: fetch prefs, then projects, with backoff retry
+    void fetchPrefsThenProjects();
+  }
+
+  async function tryFetchPrefs(): Promise<boolean> {
+    try {
+      const apiPrefs = await api.preferences.get();
+      if (apiPrefs) {
+        prefs.value = { ...prefs.value, ...apiPrefs };
+        await dbSavePrefs(prefs.value);
+        return true;
+      }
+    } catch {
+      // timeout or network error — will retry
+    }
+    return false;
+  }
+
+  async function fetchPrefsThenProjects() {
+    const generation = ++prefFetchGeneration;
+    let delay = 5000;
+
+    while (!canSync.value && generation === prefFetchGeneration) {
+      const ok = await tryFetchPrefs();
+      if (ok) {
+        canSync.value = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * 2, 60000);
+    }
+
+    if (generation !== prefFetchGeneration) return;
+
+    await fetchAndCloneProjects();
+  }
+
+  async function fetchAndCloneProjects() {
     try {
       console.log("[/:layout] fetching projects from API...");
       const apiProjects = await api.projects.list();
@@ -68,10 +100,7 @@
             console.log(
               `[/:layout] ${apiProject.id}: using cached status=${existing.status}`,
             );
-            return {
-              ...apiProject,
-              ...existing,
-            } as TProjectEntry;
+            return { ...apiProject, ...existing } as TProjectEntry;
           }
           return await projectEntryWithStatus(apiProject);
         }),
@@ -82,7 +111,6 @@
         projectEntries.map((e) => ({ id: e.id, status: e.status })),
       );
       projects.value = projectEntries;
-      console.log("[/:layout] projectsReady=true");
 
       // Persist project list
       await dbSaveProjects(projectEntries);
@@ -117,9 +145,9 @@
       console.log("[/:layout] clone loop done");
     } catch (err) {
       console.error("[/:layout] failed to load projects:", err);
-      projectsReady = true;
     }
   }
+
   onMount(async () => {
     await ensureInit();
     sessionReady = true;
@@ -131,7 +159,18 @@
     await loadProjects();
   });
 
+  onMount(() => {
+    function onOnline() {
+      if (!canSync.value) {
+        void fetchPrefsThenProjects();
+      }
+    }
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  });
+
   onDestroy(() => {
+    prefFetchGeneration++;
     syncer.stop();
   });
 </script>

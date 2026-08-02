@@ -5,6 +5,6 @@ export const prefs = $state<{ value: IUserPreferences }>({
   value: { syncType: "api" as TSyncType, proxyUrl: "" },
 });
 
-dbGetPrefs().then((cached) => {
+export const prefsReady = dbGetPrefs().then((cached) => {
   if (cached) prefs.value = cached;
 });

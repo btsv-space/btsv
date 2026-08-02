@@ -69,6 +69,14 @@ func (db *DB) migrate() error {
 			sync_type TEXT NOT NULL DEFAULT 'api',
 			proxy_url TEXT NOT NULL DEFAULT ''
 		);
+
+		-- Dedup before creating index (keep earliest created_at)
+		DELETE FROM projects WHERE rowid NOT IN (
+			SELECT MIN(rowid) FROM projects GROUP BY user_id, repo_url
+		);
+
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_user_repo
+			ON projects(user_id, repo_url);
 	`)
 	return err
 }

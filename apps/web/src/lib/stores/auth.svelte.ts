@@ -16,7 +16,7 @@ import {
 import { SvelteMap } from "svelte/reactivity";
 import { prefs } from "$lib/stores/prefs.svelte";
 import { projects } from "$lib/stores/projects.svelte";
-import { syncer } from "$lib/stores/syncer.svelte";
+import { syncer, canSync } from "$lib/stores/syncer.svelte";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 export const currentUser = $state<{ value: IUser | null }>({ value: null });
@@ -81,7 +81,10 @@ function resetAuth(): void {
 function isNetworkError(err: unknown): boolean {
   if (typeof navigator !== "undefined" && navigator.onLine === false)
     return true;
-  return err instanceof TypeError && /fetch|network|load/i.test(err.message);
+  if (err instanceof TypeError && /fetch|network|load/i.test(err.message))
+    return true;
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  return false;
 }
 
 let initPromise: Promise<void> | null = null;
@@ -153,6 +156,7 @@ function teardownSession(): void {
   sessionCheckActive = false;
   syncer.stop();
   resetAuth();
+  canSync.value = false;
   gitTokenCache.clear();
   projects.value = [];
   syncStatus.clear();

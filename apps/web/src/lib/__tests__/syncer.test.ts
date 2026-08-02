@@ -119,6 +119,7 @@ function makeConfig(getProjects?: () => TProjectEntry[]) {
   return {
     getPrefs: () => ({ syncType: "git" as TSyncType, proxyUrl: "" }),
     getProjects: getProjects ?? (() => []),
+    canSync: () => true,
     onSyncStatus,
     // Defaults to "no editor open" — saver-closed push path semantics.
     isPostEditing: vi.fn().mockReturnValue(false),
@@ -228,6 +229,24 @@ describe("Syncer", () => {
     syncer.stop();
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  describe("canSync gate", () => {
+    it("returns empty array when canSync is false", async () => {
+      const gatedConfig = makeConfig();
+      gatedConfig.canSync = () => false;
+      const gatedSyncer = new Syncer(gatedConfig);
+      const result = await gatedSyncer.pull(makeMockProjectEntry());
+      expect(result).toEqual([]);
+    });
+
+    it("returns false from push when canSync is false", async () => {
+      const gatedConfig = makeConfig();
+      gatedConfig.canSync = () => false;
+      const gatedSyncer = new Syncer(gatedConfig);
+      const result = await gatedSyncer.push(makeMockProjectEntry());
+      expect(result).toBe(false);
+    });
   });
 
   describe("hooks", () => {

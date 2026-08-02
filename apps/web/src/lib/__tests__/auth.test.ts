@@ -134,6 +134,24 @@ describe("auth store", () => {
     expect(dek.value).toBeInstanceOf(Uint8Array);
   });
 
+  it("authenticates offline with AbortError (timeout)", async () => {
+    localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ dek: TEST_DEK_B64, user: TEST_USER }),
+    );
+    fetchSpy.mockRejectedValueOnce(
+      new DOMException("The operation was aborted", "AbortError"),
+    );
+
+    const { ensureInit, isAuthenticated, currentUser, dek } =
+      await importFreshAuth();
+    await ensureInit();
+
+    expect(isAuthenticated.value).toBe(true);
+    expect(currentUser.value).toEqual(TEST_USER);
+    expect(dek.value).toBeInstanceOf(Uint8Array);
+  });
+
   it("clears auth on 401", async () => {
     localStorage.setItem(
       AUTH_STORAGE_KEY,

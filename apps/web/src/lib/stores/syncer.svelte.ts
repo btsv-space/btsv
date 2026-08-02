@@ -1,5 +1,5 @@
 import { Syncer } from "$lib/sync/syncer";
-import { prefs } from "$lib/stores/prefs.svelte";
+import { prefs, prefsReady } from "$lib/stores/prefs.svelte";
 import { projects, getProject } from "$lib/stores/projects.svelte";
 import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
 import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
@@ -8,9 +8,12 @@ import { setProjectCommitTime } from "$lib/stores/recentProject";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
 import { getCurrentSaver } from "$lib/stores/currentSaver";
 
+export const canSync = { value: false };
+
 export const syncer = new Syncer({
   getPrefs: () => prefs.value,
   getProjects: () => projects.value,
+  canSync: () => canSync.value,
   isPostEditing: (projectId, postId) => {
     const currentSaver = getCurrentSaver();
     return (
@@ -39,6 +42,7 @@ export async function loadPosts(
   projectId: string,
   opts: ILoadPostsOpts = {},
 ): Promise<IPostRecord[]> {
+  await prefsReady;
   const { pullOption, page, pageSize } = { ...defaultLoadPostsOpts, ...opts };
   const offset = (page - 1) * pageSize;
 

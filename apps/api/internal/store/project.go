@@ -2,17 +2,37 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/btsv/btsv/api/internal/model"
 )
+
+func normalizeRepoURL(raw string) string {
+	u := strings.TrimSpace(raw)
+	u = strings.ToLower(u)
+	if strings.HasPrefix(u, "git@") {
+		rest := strings.TrimPrefix(u, "git@")
+		parts := strings.SplitN(rest, ":", 2)
+		if len(parts) == 2 {
+			u = "https://" + parts[0] + "/" + parts[1]
+		} else {
+			u = "https://" + rest
+		}
+	}
+	u = strings.Replace(u, "http://", "https://", 1)
+	u = strings.TrimSuffix(u, "/")
+	u = strings.TrimSuffix(u, ".git")
+	u = strings.TrimSuffix(u, "/")
+	return u
+}
 
 func (db *DB) CreateProject(userID, name, repoURL string) (*model.Project, error) {
 	project := &model.Project{
 		ID:        newID(),
 		UserID:    userID,
 		Name:      name,
-		RepoURL:   repoURL,
+		RepoURL:   normalizeRepoURL(repoURL),
 		CreatedAt: time.Now(),
 	}
 

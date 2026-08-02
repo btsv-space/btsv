@@ -24,3 +24,5 @@ export const DEFAULT_GIT_BRANCH = "staging";
 export const MAIN_GIT_BRANCH = "main";
 
 export const POSTS_PAGE_SIZE = 15;
+
+export const DEFAULT_TIMEOUT = 10_000;
