@@ -288,11 +288,36 @@
     body.style.overflow = "hidden";
     body.style.position = "fixed";
     body.style.width = "100%";
+
+    // iOS rubber-band scroll fix: allow touchmove only when element is really scrollable
+    const el = containerEl!;
+    function onTouchmove(e: TouchEvent) {
+      if (window.innerWidth >= 768) return;
+      let node = e.target as Element | null;
+      while (node && node !== el) {
+        const style = getComputedStyle(node);
+        // Scrollable now: overflow-y allows scrolling AND content exceeds the box
+        // TBD: if noticeable, track direction to also block chain-bounce at element's boundary
+        if (
+          /(auto|scroll)/.test(style.overflowY) &&
+          node.scrollHeight > node.clientHeight
+        ) {
+          return;
+        }
+        node = node.parentElement;
+      }
+      // No scrollable ancestor found — prevent the iOS bounce on this gesture
+      e.preventDefault();
+    }
+    // passive:false so preventDefault() is honored by iOS
+    el.addEventListener("touchmove", onTouchmove, { passive: false });
+
     return () => {
       html.style.overflow = "";
       body.style.overflow = "";
       body.style.position = "";
       body.style.width = "";
+      el.removeEventListener("touchmove", onTouchmove);
     };
   });
 </script>
