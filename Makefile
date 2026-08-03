@@ -1,4 +1,4 @@
-.PHONY: dev dev-web dev-api dev-proxy dev-host lint lint-web lint-api lint-proxy format format-web format-api format-proxy test test-web test-api test-proxy build build-web build-api build-proxy start start-web start-api start-proxy start-host
+.PHONY: dev dev-web dev-api dev-proxy dev-host lint lint-web lint-api lint-proxy format format-web format-api format-proxy test test-web test-api test-proxy test-e2e test-e2e-web build build-web build-api build-proxy start start-web start-api start-proxy start-host
 
 dev:
 	@echo "Starting proxy + api + web (development)..."
@@ -72,6 +72,16 @@ test-api:
 
 test-proxy:
 	cd apps/proxy && go test ./...
+
+test-e2e: test-e2e-web
+
+test-e2e-web:
+	@echo "Running E2E tests (starting Go backend on :8090)..."
+	@set -a; [ -f .env.e2e ] && . .env.e2e; set +a; \
+	trap 'kill 0' EXIT; \
+	(cd apps/api && DATA_DIR=/tmp/btsv-e2e-test PORT=8090 go run ./cmd/server) & \
+	sleep 3; \
+	cd apps/web && pnpm test:e2e
 
 build: build-web build-api build-proxy
 

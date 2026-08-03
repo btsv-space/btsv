@@ -375,3 +375,52 @@ describe("createDebouncedSaver", () => {
     expect(lastSave.title).toBe("Second");
   });
 });
+
+describe("mount-race guard: cachedBody snapshot", () => {
+  it("workingPost and cachedPost share the same body after assignment (aliasing)", () => {
+    // Simulate: const cachedPost = dbGetPost(); workingPost = cachedPost;
+    const cachedPost = makePost({ body: "original" });
+    const workingPost = cachedPost; // same object (Svelte $state wraps in proxy
+    // but the underlying object is shared)
+
+    // User types
+    workingPost.body = "edited";
+
+    // Without a snapshot, workingPost.body === cachedPost.body is always true
+    // because they are the same object
+    expect(workingPost.body).toBe("edited");
+    expect(cachedPost.body).toBe("edited"); // aliasing — cachedPost was mutated too
+    expect(workingPost.body).toBe(cachedPost.body); // always true — the bug
+  });
+
+  it("cachedBody snapshot detects edits despite aliasing", () => {
+    // Simulate the fix: const cachedBody = cachedPost.body;
+    const cachedPost = makePost({ body: "original" });
+    const cachedBody = cachedPost.body; // snapshot as a primitive string
+
+    const workingPost = cachedPost; // same object
+    workingPost.body = "edited"; // user types
+
+    // The snapshot is a primitive — it doesn't alias with the object
+    expect(workingPost.body).toBe("edited");
+    expect(cachedBody).toBe("original"); // snapshot unchanged
+
+    // The guard: workingPost.body === cachedBody → false → don't clobber
+    expect(workingPost.body === cachedBody).toBe(false);
+
+    // PROOF: the buggy pattern (cachedPost.body) would NOT detect the edit
+    expect(workingPost.body === cachedPost.body).toBe(true); // always true — the bug
+  });
+
+  it("cachedBody snapshot returns true when user hasn't typed", () => {
+    // When the user hasn't typed, workingPost.body still equals cachedBody
+    const cachedPost = makePost({ body: "original" });
+    const cachedBody = cachedPost.body;
+
+    const workingPost = cachedPost;
+    // No mutation — user hasn't typed
+
+    // The guard: workingPost.body === cachedBody → true → adopt freshPost
+    expect(workingPost.body === cachedBody).toBe(true);
+  });
+});

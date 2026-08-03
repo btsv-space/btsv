@@ -42,6 +42,7 @@ TODO
 
 # env
 .env*
+!.env.e2e.example
 
 # working docs and design plans
 .design-docs

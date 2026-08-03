@@ -6,6 +6,7 @@ import {
   dbSaveProject,
 } from "$lib/db";
 import { serializeMdx, parseMdx } from "$lib/parser";
+import { contentEqual } from "$lib/saver";
 import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { commitTimestamp, today } from "$lib/shared/utils";
@@ -323,7 +324,11 @@ export class Syncer {
               const isEditing =
                 this.config.isPostEditing?.(project.id, post.id) ?? false;
               if (!isEditing) {
-                await dbSavePost(syncedPost);
+                // prevent overwriting intervening changes
+                const current = await dbGetPost(project.id, post.id);
+                if (current && contentEqual(current, syncedPost)) {
+                  await dbSavePost({ ...current, dirty: 0 });
+                }
               }
 
               this.#runAfterSyncHooks(

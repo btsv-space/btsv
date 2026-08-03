@@ -365,10 +365,10 @@ describe("Syncer", () => {
     });
 
     it("syncs each dirty post sequentially", async () => {
-      mockGetDirtyPosts.mockResolvedValue([
-        makeDirtyPost({ id: "post-1" }),
-        makeDirtyPost({ id: "post-2" }),
-      ]);
+      const post1 = makeDirtyPost({ id: "post-1" });
+      const post2 = makeDirtyPost({ id: "post-2" });
+      mockGetDirtyPosts.mockResolvedValue([post1, post2]);
+      mockGetPost.mockResolvedValue(post1);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
@@ -381,6 +381,7 @@ describe("Syncer", () => {
     it("marks post clean after successful sync", async () => {
       const post = makeDirtyPost();
       mockGetDirtyPosts.mockResolvedValue([post]);
+      mockGetPost.mockResolvedValue(post);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
@@ -441,6 +442,7 @@ describe("Syncer", () => {
       const post1 = makeDirtyPost({ id: "post-1" });
       const post2 = makeDirtyPost({ id: "post-2" });
       mockGetDirtyPosts.mockResolvedValue([post1, post2]);
+      mockGetPost.mockResolvedValue(post2);
       mockAdapterCommitAndPush
         .mockRejectedValueOnce(new Error("first failed"))
         .mockResolvedValueOnce("sha-2");
@@ -534,6 +536,7 @@ describe("Syncer", () => {
     it("writes dbSavePost with dirty=0 when saver-closed for the post", async () => {
       const post = makeDirtyPost();
       mockGetDirtyPosts.mockResolvedValue([post]);
+      mockGetPost.mockResolvedValue(post);
       // Default isPostEditing returns false (saver-closed).
 
       syncer.start();

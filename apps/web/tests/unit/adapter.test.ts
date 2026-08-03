@@ -4,11 +4,11 @@ import type { IProject, ISyncAdapter } from "$lib/shared/types";
 const mockGitAdapter = vi.fn();
 const mockApiAdapter = vi.fn();
 
-vi.mock("./git-adapter", () => ({
+vi.mock("$lib/sync/git-adapter", () => ({
   GitAdapter: mockGitAdapter,
 }));
 
-vi.mock("./api-adapter", () => ({
+vi.mock("$lib/sync/api-adapter", () => ({
   ApiAdapter: mockApiAdapter,
 }));
 

@@ -161,30 +161,24 @@
   onMount(async () => {
     // load cached post first
     const cachedPost = (await dbGetPost(projectId, postId)) || null;
+    // snapshot the body as a primitive for the overwrite guard at the bottom
+    const cachedBody = cachedPost?.body;
     if (cachedPost) {
       workingPost = cachedPost;
       tagsInput = tagsArrToString(cachedPost.tags);
       workingSlug = cachedPost.slug;
       lastCheckedSlug = cachedPost.slug;
     }
-    // pull from origin and load it
-    const freshPost = await loadPost(projectId, postId, { forcePull: true });
-    if (!freshPost) {
-      goto(`/${projectId}`);
-      return;
-    }
-    workingPost = freshPost;
-    tagsInput = tagsArrToString(freshPost.tags);
-    workingSlug = freshPost.slug;
-    lastCheckedSlug = freshPost.slug;
 
+    // create saver and register the sync hook before async pull
+    // mid-pull edits will be saved even if user exits editor before pull completes
     let gitBaseline: IPostRecord | null = null;
     try {
       const raw = await readPostContent(projectId, postId);
       const parsed = parseMdx(raw, postId);
-      gitBaseline = { ...workingPost, ...parsed };
+      gitBaseline = { ...(workingPost ?? {}), ...parsed } as IPostRecord;
     } catch {
-      // New post — not yet in git
+      // New post — not yet in git/fs
     }
 
     saver = createCurrentSaver({
@@ -206,6 +200,19 @@
         saver?.updateBaseline(syncedPost);
       }
     });
+
+    const freshPost = await loadPost(projectId, postId, { forcePull: true });
+    if (!freshPost) {
+      goto(`/${projectId}`);
+      return;
+    }
+    // adopt the fresh post only if user hasn't typed during the awaited pull
+    if (!cachedPost || workingPost?.body === cachedBody) {
+      workingPost = freshPost;
+      tagsInput = tagsArrToString(freshPost.tags);
+      workingSlug = freshPost.slug;
+      lastCheckedSlug = freshPost.slug;
+    }
   });
 
   onDestroy(() => {
