@@ -113,6 +113,25 @@ export async function dbGetPost(
   return db.get("posts", [projectId, id]);
 }
 
+export async function dbGetPostPage(
+  projectId: string,
+  id: string,
+  pageSize: number,
+): Promise<number> {
+  const db = await getDB();
+  const tx = db.transaction("posts", "readonly");
+  const store = tx.objectStore("posts");
+  const range = IDBKeyRange.bound(
+    [projectId, id],
+    [projectId, "\uffff"],
+    true,
+    false,
+  );
+  const count = await store.count(range);
+  await tx.done;
+  return Math.floor(count / pageSize) + 1;
+}
+
 export async function dbSavePost(post: IPostRecord): Promise<void> {
   const db = await getDB();
   const plain = JSON.parse(JSON.stringify(post));

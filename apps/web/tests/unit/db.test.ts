@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import "fake-indexeddb/auto";
-import { dbGetPosts, dbSavePost, dbGetDirtyPosts } from "$lib/db";
+import {
+  dbGetPosts,
+  dbSavePost,
+  dbGetDirtyPosts,
+  dbGetPostPage,
+} from "$lib/db";
 import type { IPostRecord } from "$lib/shared/types";
 
 function makePost(
@@ -129,6 +134,53 @@ describe("dbGetPosts", () => {
     const all = await dbGetPosts("proj-1");
     const sliced = await dbGetPosts("proj-1", { limit: 5, offset: 10 });
     expect(sliced).toEqual(all.slice(10, 15));
+  });
+});
+
+describe("dbGetPostPage", () => {
+  beforeAll(async () => {
+    // 12 posts in "proj-page" (ids post-01..post-12) plus one tombstone
+    // whose id ("post-tomb") sorts above all of them.
+    for (let i = 1; i <= 12; i++) {
+      await dbSavePost(
+        makePost(`post-${String(i).padStart(2, "0")}`, "proj-page"),
+      );
+    }
+    await dbSavePost(makePost("post-tomb", "proj-page", { deleted: true }));
+    await dbSavePost(makePost("post-01", "proj-page-2"));
+  });
+
+  it("returns page 1 for the newest post", async () => {
+    // rank 1 (only the tombstone sorts above it) -> page 1
+    expect(await dbGetPostPage("proj-page", "post-12", 5)).toBe(1);
+  });
+
+  it("returns page 1 for a post within the first page", async () => {
+    // rank 6 -> page 2; without the tombstone rank would be 5 -> page 1
+    expect(await dbGetPostPage("proj-page", "post-08", 5)).toBe(2);
+  });
+
+  it("returns page 2 at the page boundary", async () => {
+    expect(await dbGetPostPage("proj-page", "post-07", 5)).toBe(2);
+  });
+
+  it("returns page 3 for the oldest post", async () => {
+    expect(await dbGetPostPage("proj-page", "post-02", 5)).toBe(3);
+  });
+
+  it("pages are scoped to the project", async () => {
+    // same id, different project, different result
+    expect(await dbGetPostPage("proj-page-2", "post-01", 5)).toBe(1);
+    expect(await dbGetPostPage("proj-page", "post-01", 5)).toBe(3);
+  });
+
+  it("returns page 1 for an unknown id that sorts above everything", async () => {
+    expect(await dbGetPostPage("proj-page", "post-99", 5)).toBe(1);
+    expect(await dbGetPostPage("proj-page", "zzz", 5)).toBe(1);
+  });
+
+  it("returns page 1 for a project with no posts", async () => {
+    expect(await dbGetPostPage("proj-empty", "post-01", 5)).toBe(1);
   });
 });
 

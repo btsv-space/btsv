@@ -18,7 +18,8 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
-  import { dbGetPost, dbGetPostBySlug } from "$lib/db";
+  import { dbGetPost, dbGetPostBySlug, dbGetPostPage } from "$lib/db";
+  import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
 
   const projectId = page.params.projectId!;
   const postId = page.params.postId!;
@@ -116,7 +117,8 @@
   }
 
   async function handleBack() {
-    goto(`/${projectId}`);
+    const listPage = await dbGetPostPage(projectId, postId, POSTS_PAGE_SIZE);
+    goto(`/${projectId}?page=${listPage}&focus=${encodeURIComponent(postId)}`);
   }
 
   function dismissError() {

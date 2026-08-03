@@ -27,6 +27,7 @@
   });
 
   let posts = $state<IPostRecord[]>([]);
+  let postsLoaded = $state(false);
 
   let loadPostsController: AbortController | null = null;
 
@@ -46,6 +47,7 @@
       pullOption: "never",
       page: currentPage,
     });
+    postsLoaded = true;
     // load posts from pull
     console.log(`[/:projectId] onMount: loading posts`);
     await loadPage({ pullOption: "always", page: currentPage });
@@ -149,6 +151,19 @@
     if (newPage < 1) return;
     goto(`/${projectId}?page=${newPage}`);
   }
+
+  const focusId = $derived(page.url.searchParams.get("focus"));
+
+  $effect(() => {
+    if (!focusId || !postsLoaded) return;
+    const el = document.querySelector(
+      `[data-post-id="${CSS.escape(focusId)}"]`,
+    );
+    if (el instanceof HTMLElement) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+    replaceState(`/${projectId}?page=${currentPage}`, {});
+  });
 </script>
 
 {#if !projectEntry}
@@ -210,6 +225,7 @@
           class="card cursor-pointer hover:border-muted-foreground/50 relative overflow-hidden"
           role="button"
           tabindex="0"
+          data-post-id={post.id}
           onclick={() => openPost(post.id)}
           onkeydown={(e) => e.key === "Enter" && openPost(post.id)}
         >
