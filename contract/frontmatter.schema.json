@@ -41,7 +41,7 @@
 		},
 		"id": {
 			"type": "string",
-			"description": "Internal post identifier (timestamp in YYYYMMDD-HHMMSSmm format). Auto-generated, do not edit."
+			"description": "Internal post identifier (timestamp in YYYYMMDD-HHMMSSmm-<rand> format). Auto-generated, do not edit."
 		},
 		"slug": {
 			"type": "string",

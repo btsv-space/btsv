@@ -405,45 +405,41 @@ export class ApiAdapter implements ISyncAdapter {
   ): Promise<string | null> {
     const filepath = getPostPath(postId);
     const url = `https://api.github.com/repos/${this.owner}/${this.repo}/contents/${filepath}`;
+    const branchUrl = `${url}?ref=${encodeURIComponent(this.gitBranch)}`;
 
-    const existingRes = await fetch(
-      `${url}?ref=${encodeURIComponent(this.gitBranch)}`,
-      {
+    const delRes = await withRetryAndBackoff(async () => {
+      const existingRes = await fetch(branchUrl, {
         headers: { Authorization: `Bearer ${gitToken}` },
-      },
-    );
+      });
 
-    if (!existingRes.ok) {
-      if (existingRes.status === 404) return null;
-      throw new Error(`GitHub API get failed: ${existingRes.status}`);
-    }
+      if (!existingRes.ok) {
+        // File already gone — nothing to delete.
+        if (existingRes.status === 404) return null;
+        throw new Error(`GitHub API get failed: ${existingRes.status}`);
+      }
 
-    const existing = await existingRes.json();
+      const existing = await existingRes.json();
+      return fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${gitToken}`,
+        },
+        body: JSON.stringify({
+          message,
+          sha: existing.sha,
+          branch: this.gitBranch,
+        }),
+      });
+    }, "GitHub API delete");
 
-    const delRes = await fetch(url, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${gitToken}`,
-      },
-      body: JSON.stringify({
-        message,
-        sha: existing.sha,
-        branch: this.gitBranch,
-      }),
-    });
-
-    if (!delRes.ok) {
-      const errBody = await delRes.text();
-      throw new Error(`GitHub API delete failed: ${delRes.status} ${errBody}`);
-    }
+    if (delRes === null) return null;
 
     try {
       await deletePostFile(projectId, postId);
     } catch (err) {
       console.debug("[api] deletePostFile error, file may not exist:", err);
     }
-
     const result = await delRes.json();
     return result.commit?.sha ?? null;
   }
@@ -473,48 +469,54 @@ async function putWithRetry(
   sha: string | undefined,
   branch: string,
 ): Promise<Response> {
-  const body: Record<string, string> = {
-    message,
-    content: b64Encode(content),
-    branch,
-  };
-  if (sha) body.sha = sha;
+  const res = await withRetryAndBackoff(async (attempt) => {
+    let currentSha = sha;
+    if (attempt > 0) {
+      const branchUrl = `${url}?ref=${encodeURIComponent(branch)}`;
+      const fresh = await fetchCurrentFile(branchUrl, gitToken);
+      if (fresh) currentSha = fresh.sha;
+    }
 
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${gitToken}`,
-    },
-    body: JSON.stringify(body),
-  });
+    const body: Record<string, string> = {
+      message,
+      content: b64Encode(content),
+      branch,
+    };
+    if (currentSha) body.sha = currentSha;
 
-  if (res.status === 409 && sha) {
-    const branchUrl = `${url}?ref=${encodeURIComponent(branch)}`;
-    const fresh = await fetchCurrentFile(branchUrl, gitToken);
-    if (fresh && fresh.sha !== sha) {
-      const retryBody: Record<string, string> = {
-        message,
-        content: b64Encode(content),
-        sha: fresh.sha,
-        branch,
-      };
-      const retryRes = await fetch(url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${gitToken}`,
-        },
-        body: JSON.stringify(retryBody),
-      });
-      if (retryRes.ok) return retryRes;
+    return fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${gitToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }, "GitHub API commit");
+  // the PUT request can never return a null response
+  return res!;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function withRetryAndBackoff(
+  operation: (attempt: number) => Promise<Response | null>,
+  label: string,
+  maxAttempts = 3,
+): Promise<Response | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await sleep(500 * attempt);
+    const res = await operation(attempt);
+    if (res === null) return null;
+    if (res.ok) return res;
+    if (res.status !== 409 || attempt === maxAttempts - 1) {
+      const errBody = await res.text();
+      throw new Error(
+        `${label} failed (attempt ${attempt + 1}/${maxAttempts}): ${res.status} ${errBody}`,
+      );
     }
   }
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    throw new Error(`GitHub API commit failed: ${res.status} ${errBody}`);
-  }
-
-  return res;
+  throw new Error(`${label}: exhausted retries (unreachable)`);
 }

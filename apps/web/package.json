@@ -14,7 +14,9 @@
     "lint": "prettier --check . && eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e:parallel": "playwright test --project=sync_parallel",
+    "test:e2e:sequential": "playwright test --project=sync_sequential --workers=1",
+    "test:e2e": "pnpm test:e2e:parallel; P=$?; pnpm test:e2e:sequential; S=$?; exit $((P | S))"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

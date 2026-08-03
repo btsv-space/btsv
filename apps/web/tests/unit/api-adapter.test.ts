@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ApiAdapter } from "$lib/sync/api-adapter";
 
 const mockMkdir = vi.fn();
@@ -52,6 +52,10 @@ beforeEach(() => {
   });
 
   mockGetDir.mockReturnValue(PROJECT_DIR);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("constructor", () => {
@@ -750,7 +754,210 @@ describe("commitAndPush", () => {
     const adapter = new ApiAdapter("https://github.com/owner/repo.git");
     await expect(
       adapter.commitAndPush("proj-1", "post-1", "content", "msg", "token-abc"),
-    ).rejects.toThrow("GitHub API commit failed: 422 Unprocessable");
+    ).rejects.toThrow(
+      "GitHub API commit failed (attempt 1/3): 422 Unprocessable",
+    );
+  });
+
+  it("retries on 409 with refetched SHA and succeeds", async () => {
+    vi.useFakeTimers();
+    let putCount = 0;
+    let getCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          getCount++;
+          const sha = getCount === 1 ? "sha-A" : "sha-B";
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sha, content: btoa("old-content") }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        putCount++;
+        if (putCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            text: () => Promise.resolve("Conflict"),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ commit: { sha: "sha-retry" } }),
+          text: () => Promise.resolve(""),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const promise = adapter.commitAndPush(
+      "proj-1",
+      "post-1",
+      "new-content",
+      "msg",
+      "token-abc",
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    const sha = await promise;
+
+    expect(sha).toBe("sha-retry");
+    expect(putCount).toBe(2);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const putCalls = fetchMock.mock.calls.filter(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === "PUT",
+    );
+    const firstPutBody = JSON.parse(
+      (putCalls[0]![1] as RequestInit).body as string,
+    );
+    const retryPutBody = JSON.parse(
+      (putCalls[1]![1] as RequestInit).body as string,
+    );
+    expect(firstPutBody.sha).toBe("sha-A");
+    expect(retryPutBody.sha).toBe("sha-B");
+  });
+
+  it("retries on 409 even when refetch returns same SHA (laggy replica)", async () => {
+    vi.useFakeTimers();
+    let putCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({ sha: "sha-A", content: btoa("old-content") }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        putCount++;
+        if (putCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            text: () => Promise.resolve("Conflict"),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ commit: { sha: "sha-retry" } }),
+          text: () => Promise.resolve(""),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const promise = adapter.commitAndPush(
+      "proj-1",
+      "post-1",
+      "new-content",
+      "msg",
+      "token-abc",
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    const sha = await promise;
+
+    expect(sha).toBe("sha-retry");
+    expect(putCount).toBe(2);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const putCalls = fetchMock.mock.calls.filter(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === "PUT",
+    );
+    const firstPutBody = JSON.parse(
+      (putCalls[0]![1] as RequestInit).body as string,
+    );
+    const retryPutBody = JSON.parse(
+      (putCalls[1]![1] as RequestInit).body as string,
+    );
+    expect(firstPutBody.sha).toBe("sha-A");
+    expect(retryPutBody.sha).toBe("sha-A");
+  });
+
+  it("caps at 3 attempts on consecutive 409s", async () => {
+    vi.useFakeTimers();
+    let putCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                sha: `sha-${putCount}`,
+                content: btoa("old-content"),
+              }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        putCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          text: () => Promise.resolve("Conflict"),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const promise = adapter.commitAndPush(
+      "proj-1",
+      "post-1",
+      "new-content",
+      "msg",
+      "token-abc",
+    );
+    promise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(promise).rejects.toThrow("attempt 3/3");
+    expect(putCount).toBe(3);
+  });
+
+  it("does not retry on non-409 errors", async () => {
+    let putCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({ sha: "sha-A", content: btoa("old-content") }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        putCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 422,
+          text: () => Promise.resolve("Unprocessable"),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    await expect(
+      adapter.commitAndPush(
+        "proj-1",
+        "post-1",
+        "new-content",
+        "msg",
+        "token-abc",
+      ),
+    ).rejects.toThrow("attempt 1/3");
+    expect(putCount).toBe(1);
   });
 
   it("returns null when content has not changed", async () => {
@@ -915,6 +1122,131 @@ describe("commitDeletion", () => {
     const adapter = new ApiAdapter("https://github.com/owner/repo.git");
     await expect(
       adapter.commitDeletion("proj-1", "post-1", "msg", "token-abc"),
-    ).rejects.toThrow("GitHub API delete failed: 403 Forbidden");
+    ).rejects.toThrow("GitHub API delete failed (attempt 1/3): 403 Forbidden");
+  });
+
+  it("retries on 409 with refetched SHA and succeeds", async () => {
+    vi.useFakeTimers();
+    let deleteCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sha: `sha-${deleteCount}` }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        deleteCount++;
+        if (deleteCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 409,
+            text: () => Promise.resolve("Conflict"),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ commit: { sha: "delete-sha" } }),
+          text: () => Promise.resolve(""),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const promise = adapter.commitDeletion(
+      "proj-1",
+      "post-1",
+      "msg",
+      "token-abc",
+    );
+    await vi.advanceTimersByTimeAsync(500);
+    const sha = await promise;
+
+    expect(sha).toBe("delete-sha");
+    expect(deleteCount).toBe(2);
+
+    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
+    const deleteCalls = fetchMock.mock.calls.filter(
+      (c: unknown[]) => (c[1] as RequestInit)?.method === "DELETE",
+    );
+    const firstDeleteBody = JSON.parse(
+      (deleteCalls[0]![1] as RequestInit).body as string,
+    );
+    const retryDeleteBody = JSON.parse(
+      (deleteCalls[1]![1] as RequestInit).body as string,
+    );
+    expect(firstDeleteBody.sha).toBe("sha-0");
+    expect(retryDeleteBody.sha).toBe("sha-1");
+  });
+
+  it("caps at 3 attempts on consecutive 409s", async () => {
+    vi.useFakeTimers();
+    let deleteCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sha: `sha-${deleteCount}` }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        deleteCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          text: () => Promise.resolve("Conflict"),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    const promise = adapter.commitDeletion(
+      "proj-1",
+      "post-1",
+      "msg",
+      "token-abc",
+    );
+    promise.catch(() => {});
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(promise).rejects.toThrow("attempt 3/3");
+    expect(deleteCount).toBe(3);
+  });
+
+  it("does not retry on non-409 DELETE errors", async () => {
+    let deleteCount = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      (url: string | URL | Request, opts?: RequestInit) => {
+        const method = (opts as RequestInit)?.method ?? "GET";
+        if (method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ sha: "file-sha" }),
+            text: () => Promise.resolve(""),
+          } as Response);
+        }
+        deleteCount++;
+        return Promise.resolve({
+          ok: false,
+          status: 403,
+          text: () => Promise.resolve("Forbidden"),
+        } as Response);
+      },
+    );
+
+    const adapter = new ApiAdapter("https://github.com/owner/repo.git");
+    await expect(
+      adapter.commitDeletion("proj-1", "post-1", "msg", "token-abc"),
+    ).rejects.toThrow("attempt 1/3");
+    expect(deleteCount).toBe(1);
   });
 });

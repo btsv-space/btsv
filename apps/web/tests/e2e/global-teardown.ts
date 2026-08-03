@@ -4,9 +4,7 @@
  * tests made during the run.
  */
 
-import { TEST_REPO_URL, TEST_GIT_TOKEN } from "./helpers";
-
-const BASELINE_SHA = "cd1965cbf77395859bf2d1f4442426a8e40ee783";
+import { TEST_REPO_URL, TEST_GIT_TOKEN, TEST_BASELINE_SHA } from "./helpers";
 
 function parseRepoUrl(url: string): { owner: string; repo: string } {
   const clean = url.replace(/\.git$/, "").replace(/\/$/, "");
@@ -31,12 +29,14 @@ export default async function globalTeardown() {
         {
           method: "PATCH",
           headers,
-          body: JSON.stringify({ sha: BASELINE_SHA, force: true }),
+          body: JSON.stringify({ sha: TEST_BASELINE_SHA, force: true }),
         },
       );
 
       if (res.ok) {
-        console.log(`[teardown] reset ${branch} → ${BASELINE_SHA.slice(0, 8)}`);
+        console.log(
+          `[teardown] reset ${branch} → ${TEST_BASELINE_SHA.slice(0, 8)}`,
+        );
       } else {
         const body = await res.text().catch(() => "");
         console.log(

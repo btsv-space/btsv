@@ -38,7 +38,7 @@ export interface BtsvPostFrontmatter {
    */
   draft?: boolean;
   /**
-   * Internal post identifier (timestamp in YYYYMMDD-HHMMSSmm format). Auto-generated, do not edit.
+   * Internal post identifier (timestamp in YYYYMMDD-HHMMSSmm-<rand> format). Auto-generated, do not edit.
    */
   id?: string;
   /**

@@ -41,8 +41,8 @@
       console.error(`[post] cannot delete ${id}: project ${pid} not found`);
       return;
     }
-    await syncer.commitDeletion(project, id);
-    await syncer.push(project);
+    await syncer.markForDeletion(project, id);
+    syncer.push(project).catch(() => {});
   }
 
   let workingPost = $state<IPostRecord | null>(null);
@@ -161,14 +161,16 @@
   onMount(async () => {
     // load cached post first
     const cachedPost = (await dbGetPost(projectId, postId)) || null;
-    // snapshot the body as a primitive for the overwrite guard at the bottom
-    const cachedBody = cachedPost?.body;
-    if (cachedPost) {
-      workingPost = cachedPost;
-      tagsInput = tagsArrToString(cachedPost.tags);
-      workingSlug = cachedPost.slug;
-      lastCheckedSlug = cachedPost.slug;
+    if (!cachedPost || cachedPost.deleted) {
+      goto(`/${projectId}`);
+      return;
     }
+    // snapshot the body as a primitive for the overwrite guard at the bottom
+    const cachedBody = cachedPost.body;
+    workingPost = cachedPost;
+    tagsInput = tagsArrToString(cachedPost.tags);
+    workingSlug = cachedPost.slug;
+    lastCheckedSlug = cachedPost.slug;
 
     // create saver and register the sync hook before async pull
     // mid-pull edits will be saved even if user exits editor before pull completes
@@ -202,12 +204,12 @@
     });
 
     const freshPost = await loadPost(projectId, postId, { forcePull: true });
-    if (!freshPost) {
+    if (!freshPost || freshPost.deleted) {
       goto(`/${projectId}`);
       return;
     }
     // adopt the fresh post only if user hasn't typed during the awaited pull
-    if (!cachedPost || workingPost?.body === cachedBody) {
+    if (workingPost?.body === cachedBody) {
       workingPost = freshPost;
       tagsInput = tagsArrToString(freshPost.tags);
       workingSlug = freshPost.slug;
@@ -217,7 +219,7 @@
 
   onDestroy(() => {
     unregisterHook?.();
-    saver?.flush().then(() => {
+    saver?.flush()?.then(() => {
       const project = getProject(projectId);
       if (project) syncer.push(project);
       destroyCurrentSaver();

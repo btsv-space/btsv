@@ -816,17 +816,15 @@ describe("Syncer", () => {
     });
   });
 
-  describe("commitDeletion", () => {
-    it("saves as pending deletion when no git token and file exists on disk", async () => {
-      mockEnsureGitToken.mockResolvedValue(null);
+  describe("markForDeletion", () => {
+    it("marks as deleted:true when file exists on disk (push is caller's job)", async () => {
       mockPostFileExists.mockResolvedValue(true);
       mockGetPost.mockResolvedValue(makeDirtyPost({ id: "post-1" }));
+      const pushSpy = vi.spyOn(syncer, "push").mockResolvedValue(true);
 
-      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+      await syncer.markForDeletion(makeMockProjectEntry(), "post-1");
 
-      // OPFS file is deleted regardless
       expect(mockDeletePostFile).toHaveBeenCalledWith("proj-1", "post-1");
-      // No token — saved as pending deletion for the push loop to handle
       expect(mockDeletePost).not.toHaveBeenCalled();
       expect(mockSavePost).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -835,25 +833,22 @@ describe("Syncer", () => {
           deleted: true,
         }),
       );
-      // #ensureGitToken emits ERROR status itself when no token available.
+      expect(pushSpy).not.toHaveBeenCalled();
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        {
-          state: ESyncState.ERROR,
-          errorMsg: "No git token available",
-        },
+        { state: ESyncState.SYNCED, errorMsg: "" },
         null,
       );
+      pushSpy.mockRestore();
     });
 
     it("deletes IDB row when file does not exist on disk", async () => {
       mockPostFileExists.mockResolvedValue(false);
 
-      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+      await syncer.markForDeletion(makeMockProjectEntry(), "post-1");
 
       expect(mockDeletePost).toHaveBeenCalledTimes(1);
       expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
-      // File-not-on-disk path fires SYNCED status after the deletion.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
         { state: ESyncState.SYNCED, errorMsg: "" },
@@ -861,56 +856,23 @@ describe("Syncer", () => {
       );
     });
 
-    it("saves as pending deletion with deleted:true and persists sha after successful commit", async () => {
+    it("does not call adapter — push loop handles git operations", async () => {
       mockPostFileExists.mockResolvedValue(true);
-      mockAdapterCommitDeletion.mockResolvedValue("sha-delete");
-      mockGetPost.mockResolvedValue(
-        makeDirtyPost({ id: "post-1", draft: true }),
-      );
+      mockGetPost.mockResolvedValue(makeDirtyPost({ id: "post-1" }));
+      vi.spyOn(syncer, "push").mockResolvedValue(true);
 
-      const project = makeMockProjectEntry();
-      await syncer.commitDeletion(project, "post-1");
+      await syncer.markForDeletion(makeMockProjectEntry(), "post-1");
 
-      expect(mockAdapterCommitDeletion).toHaveBeenCalledWith(
-        "proj-1",
-        "post-1",
-        expect.stringMatching(/-delete-/),
-        "decrypted-token",
-      );
-      // Post is saved as pending deletion, not deleted outright
-      expect(mockDeletePost).not.toHaveBeenCalled();
-      expect(mockSavePost).toHaveBeenCalledTimes(1);
-      expect(mockSavePost).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "post-1",
-          dirty: 1,
-          deleted: true,
-        }),
-      );
-      expect(mockSaveProject).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: "proj-1",
-          storedRemoteSha: "sha-delete",
-        }),
-      );
-      expect(config.onSyncStatus).toHaveBeenCalledWith(
-        "proj-1",
-        { state: ESyncState.SYNCED, errorMsg: "" },
-        null,
-      );
+      expect(mockAdapterCommitDeletion).not.toHaveBeenCalled();
+      expect(mockSaveProject).not.toHaveBeenCalled();
     });
 
-    it("recompute flags project dirty when other dirty posts remain after a deletion", async () => {
+    it("deletes IDB row and does not push when file never existed on disk", async () => {
       mockPostFileExists.mockResolvedValue(false);
-      // After deleting the requested post, one other dirty post remains.
-      mockGetDirtyPosts.mockResolvedValue([
-        makeDirtyPost({ id: "other-post", dirty: 1 }),
-      ]);
 
-      await syncer.commitDeletion(makeMockProjectEntry(), "post-1");
+      await syncer.markForDeletion(makeMockProjectEntry(), "post-1");
 
       expect(mockDeletePost).toHaveBeenCalledTimes(1);
-      // The !existsOnDisk path fires SYNCED.
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
         { state: ESyncState.SYNCED, errorMsg: "" },

@@ -6,6 +6,17 @@ export default defineConfig({
   workers: 4,
   timeout: 120_000,
   globalTeardown: "./tests/e2e/global-teardown.ts",
+  projects: [
+    {
+      name: "sync_parallel",
+      testDir: "./tests/e2e/sync_parallel",
+    },
+    {
+      name: "sync_sequential",
+      testDir: "./tests/e2e/sync_sequential",
+      fullyParallel: false,
+    },
+  ],
   use: {
     baseURL: "http://localhost:5173",
     channel: "chrome",

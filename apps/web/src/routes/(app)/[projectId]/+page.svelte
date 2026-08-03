@@ -77,10 +77,13 @@
   }
 
   async function generateUniquePostId(projectId: string): Promise<string> {
-    const base = Date.now();
-    let id = formatTimestamp(new Date(base));
+    const makeId = () => {
+      const rand = Math.random().toString(36).slice(2, 6);
+      return `${formatTimestamp(new Date())}-${rand}`;
+    };
+    let id = makeId();
     for (let attempt = 0; await dbGetPost(projectId, id); attempt++) {
-      id = formatTimestamp(new Date(base + attempt * 10));
+      id = makeId();
     }
     return id;
   }

@@ -81,7 +81,9 @@ test-e2e-web:
 	trap 'kill 0' EXIT; \
 	(cd apps/api && DATA_DIR=/tmp/btsv-e2e-test PORT=8090 go run ./cmd/server) & \
 	sleep 3; \
-	cd apps/web && pnpm test:e2e
+	cd apps/web && pnpm test:e2e:parallel $(ARGS); PARALLEL=$$?; \
+	pnpm test:e2e:sequential; SEQUENTIAL=$$?; \
+	exit $$(($$PARALLEL | $$SEQUENTIAL))
 
 build: build-web build-api build-proxy
 
