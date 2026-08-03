@@ -114,15 +114,14 @@
           {#each sortedProjects as project (project.id)}
             <div
               class="flex items-center gap-2 px-2 py-2 pl-4 text-foreground cursor-pointer hover:bg-muted relative"
-              class:pointer-events-none={project.id === currentProjectId}
               onclick={() => {
                 close();
-                goto(`/${project.id}`);
+                goto(`/${project.id}?page=1`);
               }}
               onkeydown={(e) =>
-                e.key === "Enter" && (close(), goto(`/${project.id}`))}
+                e.key === "Enter" && (close(), goto(`/${project.id}?page=1`))}
               role="link"
-              tabindex={project.id === currentProjectId ? -1 : 0}
+              tabindex="0"
             >
               <SyncIndicator projectId={project.id} />
               {project.name}
