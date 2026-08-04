@@ -2,3 +2,7 @@
 	path = builder-templates/btsv-template-astro
 	url = https://github.com/btsv-space/btsv-template-astro
 	branch = main
+[submodule "builder-templates/btsv-template-hugo"]
+	path = builder-templates/btsv-template-hugo
+	url = https://github.com/btsv-space/btsv-template-hugo.git
+	branch = main
