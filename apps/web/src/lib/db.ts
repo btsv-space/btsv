@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_LIST_PREFS, matchesListPrefs } from "$lib/postsList";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 const SORT_INDEXES: Record<TPostSortField, string> = {
   dateCreated: "by_project_dateCreated",
@@ -90,6 +90,13 @@ function getDB(): Promise<IDBPDatabase> {
             if (!store.indexNames.contains(name)) {
               store.createIndex(name, keyPath, { unique: false });
             }
+          }
+        }
+        if (oldVersion < 9) {
+          const store = tx.objectStore("posts");
+          if (!store.indexNames.contains("by_tag")) {
+            // single-key: the IDB spec forbids compound+multiEntry
+            store.createIndex("by_tag", "tags", { multiEntry: true });
           }
         }
       },
@@ -205,6 +212,23 @@ export async function dbGetPostBySlug(
   );
   await tx.done;
   return matches.find((m) => !m.deleted);
+}
+
+export async function dbGetProjectTags(projectId: string): Promise<string[]> {
+  const db = await getDB();
+  const tx = db.transaction("posts", "readonly");
+  const index = tx.store.index("by_tag");
+  const tags = new Set<string>();
+  let cursor = await index.openCursor();
+  while (cursor) {
+    const post = cursor.value as IPostRecord;
+    if (post.projectId === projectId && !post.deleted) {
+      tags.add(cursor.key as string);
+    }
+    cursor = await cursor.continue();
+  }
+  await tx.done;
+  return [...tags].sort((a, b) => a.localeCompare(b));
 }
 
 // ── Projects cache ────────────────────────────────

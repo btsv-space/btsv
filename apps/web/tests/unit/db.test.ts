@@ -5,6 +5,7 @@ import {
   dbSavePost,
   dbGetDirtyPosts,
   dbGetPostPage,
+  dbGetProjectTags,
 } from "$lib/db";
 import type { IPostRecord, IPostsListPrefs } from "$lib/shared/types";
 import { DEFAULT_LIST_PREFS } from "$lib/postsList";
@@ -496,5 +497,36 @@ describe("dbGetPostPage with listPrefs", () => {
         listPrefs({ sort: "datePublished" }),
       ),
     ).toBe(2);
+  });
+});
+
+describe("dbGetProjectTags", () => {
+  beforeAll(async () => {
+    await dbSavePost(makePost("t-01", "proj-tags", { tags: ["js", "svelte"] }));
+    await dbSavePost(
+      makePost("t-02", "proj-tags", { tags: ["svelte", "kit"] }),
+    );
+    // tombstone: its unique tag must not surface
+    await dbSavePost(
+      makePost("t-03", "proj-tags", { tags: ["ghost", "js"], deleted: true }),
+    );
+    await dbSavePost(makePost("t-04", "proj-tags")); // no tags
+    await dbSavePost(makePost("t-05", "proj-other", { tags: ["other"] }));
+  });
+
+  it("returns distinct, sorted tags for the project", async () => {
+    expect(await dbGetProjectTags("proj-tags")).toEqual([
+      "js",
+      "kit",
+      "svelte",
+    ]);
+  });
+
+  it("is scoped to the project", async () => {
+    expect(await dbGetProjectTags("proj-other")).toEqual(["other"]);
+  });
+
+  it("returns [] for a project with no tagged posts", async () => {
+    expect(await dbGetProjectTags("proj-empty")).toEqual([]);
   });
 });

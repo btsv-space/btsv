@@ -22,7 +22,13 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
-  import { dbGetPost, dbGetPostBySlug, dbGetPostPage } from "$lib/db";
+  import TagsInput from "$lib/components/TagsInput.svelte";
+  import {
+    dbGetPost,
+    dbGetPostBySlug,
+    dbGetPostPage,
+    dbGetProjectTags,
+  } from "$lib/db";
   import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
   import { postsListPrefs } from "$lib/stores/postsListPrefs.svelte";
 
@@ -53,6 +59,7 @@
 
   let workingPost = $state<IPostRecord | null>(null);
   let tagsInput = $state("");
+  let allTags = $state<string[]>([]);
   let saveError = $state<{ title: string; message: string } | null>(null);
   let slugError = $state("");
   let showDeleteConfirm = $state(false);
@@ -210,6 +217,12 @@
     tagsInput = tagsArrToString(cachedPost.tags);
     workingSlug = cachedPost.slug;
     lastCheckedSlug = cachedPost.slug;
+
+    try {
+      allTags = await dbGetProjectTags(projectId);
+    } catch (err) {
+      console.error("[editor] failed to load project tags:", err);
+    }
 
     // create saver and register the sync hook before async pull
     // mid-pull edits will be saved even if user exits editor before pull completes
@@ -531,14 +544,10 @@
           class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
         >
           <span>Tags (comma-separated)</span>
-          <input
-            type="text"
+          <TagsInput
             bind:value={tagsInput}
+            {allTags}
             placeholder="tag1, tag2"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck={false}
-            class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>
         <label class="flex flex-row items-center gap-2 cursor-pointer">
