@@ -1,12 +1,21 @@
 import { openDB, type IDBPDatabase } from "idb";
 import type {
   IPostRecord,
+  IPostsListPrefs,
   IUserPreferences,
+  TPostSortField,
   TProjectEntry,
 } from "$lib/shared/types";
+import { DEFAULT_LIST_PREFS, matchesListPrefs } from "$lib/postsList";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 7;
+const DB_VERSION = 8;
+
+const SORT_INDEXES: Record<TPostSortField, string> = {
+  dateCreated: "by_project_dateCreated",
+  dateUpdated: "by_project_dateUpdated",
+  datePublished: "by_project_datePublished",
+};
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -70,38 +79,63 @@ function getDB(): Promise<IDBPDatabase> {
             });
           }
         }
+        if (oldVersion < 8) {
+          const store = tx.objectStore("posts");
+          const dateIndexes: [string, string[]][] = [
+            ["by_project_dateCreated", ["projectId", "dateCreated"]],
+            ["by_project_dateUpdated", ["projectId", "dateUpdated"]],
+            ["by_project_datePublished", ["projectId", "datePublished"]],
+          ];
+          for (const [name, keyPath] of dateIndexes) {
+            if (!store.indexNames.contains(name)) {
+              store.createIndex(name, keyPath, { unique: false });
+            }
+          }
+        }
       },
     });
   }
   return dbPromise;
 }
 
-export async function dbGetPosts(
+async function walkPostsIndex(
   projectId: string,
-  opts: { limit?: number; offset?: number } = {},
-): Promise<IPostRecord[]> {
-  const { limit, offset = 0 } = opts;
+  listPrefs: IPostsListPrefs,
+  processPost: (post: IPostRecord) => boolean | void,
+): Promise<void> {
   const db = await getDB();
   const tx = db.transaction("posts", "readonly");
-  const store = tx.objectStore("posts");
+  const index = tx.store.index(SORT_INDEXES[listPrefs.sort]);
   const range = IDBKeyRange.bound([projectId, ""], [projectId, "\uffff"]);
+  const direction = listPrefs.order === "desc" ? "prev" : "next";
 
-  if (limit === undefined) {
-    const all: IPostRecord[] = await store.getAll(range);
-    await tx.done;
-    return all.reverse();
-  }
-
-  let cursor = await store.openCursor(range, "prev");
-  if (!cursor) return [];
-  if (offset > 0) cursor = await cursor.advance(offset);
-  if (!cursor) return [];
-  const posts: IPostRecord[] = [];
-  while (cursor && posts.length < limit) {
-    posts.push(cursor.value);
+  let cursor = await index.openCursor(range, direction);
+  while (cursor) {
+    if (processPost(cursor.value) === false) break;
     cursor = await cursor.continue();
   }
   await tx.done;
+}
+
+export async function dbGetPosts(
+  projectId: string,
+  opts: {
+    limit: number;
+    offset?: number;
+    listPrefs?: IPostsListPrefs;
+  },
+): Promise<IPostRecord[]> {
+  const { limit, offset = 0, listPrefs = DEFAULT_LIST_PREFS } = opts;
+
+  const posts: IPostRecord[] = [];
+  let matched = 0;
+  await walkPostsIndex(projectId, listPrefs, (post) => {
+    if (!matchesListPrefs(post, listPrefs)) return;
+    if (matched >= offset) posts.push(post);
+    matched++;
+    // stop once page is full
+    if (posts.length >= limit) return false;
+  });
   return posts;
 }
 
@@ -117,19 +151,20 @@ export async function dbGetPostPage(
   projectId: string,
   id: string,
   pageSize: number,
-): Promise<number> {
-  const db = await getDB();
-  const tx = db.transaction("posts", "readonly");
-  const store = tx.objectStore("posts");
-  const range = IDBKeyRange.bound(
-    [projectId, id],
-    [projectId, "\uffff"],
-    true,
-    false,
-  );
-  const count = await store.count(range);
-  await tx.done;
-  return Math.floor(count / pageSize) + 1;
+  listPrefs: IPostsListPrefs = DEFAULT_LIST_PREFS,
+): Promise<number | null> {
+  let position = 0;
+  let result: number | null = null;
+  await walkPostsIndex(projectId, listPrefs, (post) => {
+    const isMatch = matchesListPrefs(post, listPrefs);
+    if (post.id === id) {
+      // the target only counts if it passes the filter predicate
+      if (isMatch) result = Math.floor(position / pageSize) + 1;
+      return false;
+    }
+    if (isMatch) position++;
+  });
+  return result;
 }
 
 export async function dbSavePost(post: IPostRecord): Promise<void> {

@@ -10,12 +10,27 @@
     ESyncState,
     type ILoadPostsOpts,
     type IPostRecord,
+    type IPostsListPrefs,
+    type TDraftFilter,
+    type TPageFilter,
+    type TPostSortField,
   } from "$lib/shared/types";
   import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
-  import { today } from "$lib/shared/utils";
+  import { now, formatPostDate } from "$lib/shared/utils";
+  import { postsListPrefs } from "$lib/stores/postsListPrefs.svelte";
+  import { DEFAULT_LIST_PREFS, isDefaultListPrefs } from "$lib/postsList";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import EditTokenModal from "$lib/components/EditTokenModal.svelte";
-  import { FilePlus, ChevronLeft, ChevronRight, Wrench } from "@lucide/svelte";
+  import Popover from "$lib/components/Popover.svelte";
+  import {
+    FilePlus,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+    Wrench,
+    ArrowDownWideNarrow,
+    ArrowUpNarrowWide,
+  } from "@lucide/svelte";
 
   const projectId = page.params.projectId!;
 
@@ -29,6 +44,12 @@
   let posts = $state<IPostRecord[]>([]);
   let postsLoaded = $state(false);
 
+  const listPrefs = $derived(postsListPrefs.get(projectId));
+  let optionsOpen = $state(false);
+
+  const selectClass =
+    "bg-background border border-border rounded-full text-sm pl-3 pr-8 py-1.5 cursor-pointer appearance-none";
+
   let loadPostsController: AbortController | null = null;
 
   async function loadPage(opts: ILoadPostsOpts = {}) {
@@ -36,9 +57,50 @@
     const controller = new AbortController();
     loadPostsController = controller;
 
-    const records = await loadPosts(projectId, opts);
+    const records = await loadPosts(projectId, { ...opts, listPrefs });
     if (controller.signal.aborted) return;
     posts = records;
+  }
+
+  function onPrefsChange(next: IPostsListPrefs) {
+    postsListPrefs.set(projectId, next);
+    if (currentPage > 1) {
+      goto(`/${projectId}?page=1`); // afterNavigate reloads
+    } else {
+      void loadPage({ pullOption: "never", page: 1 });
+    }
+  }
+
+  function onSortFieldChange(e: Event) {
+    onPrefsChange({
+      ...listPrefs,
+      sort: (e.target as HTMLSelectElement).value as TPostSortField,
+    });
+  }
+
+  function onToggleSortOrder() {
+    onPrefsChange({
+      ...listPrefs,
+      order: listPrefs.order === "desc" ? "asc" : "desc",
+    });
+  }
+
+  function onDraftFilterChange(e: Event) {
+    onPrefsChange({
+      ...listPrefs,
+      draft: (e.target as HTMLSelectElement).value as TDraftFilter,
+    });
+  }
+
+  function onPageFilterChange(e: Event) {
+    onPrefsChange({
+      ...listPrefs,
+      page: (e.target as HTMLSelectElement).value as TPageFilter,
+    });
+  }
+
+  function clearFilters() {
+    onPrefsChange({ ...listPrefs, draft: "all", page: "all" });
   }
 
   onMount(async () => {
@@ -46,6 +108,7 @@
     posts = await loadPosts(projectId, {
       pullOption: "never",
       page: currentPage,
+      listPrefs,
     });
     postsLoaded = true;
     // load posts from pull
@@ -92,15 +155,15 @@
 
   async function createPost(projectId: string): Promise<{ id: string }> {
     const id = await generateUniquePostId(projectId);
-    const todayStr = today();
+    const nowStr = now();
 
     const newPost: IPostRecord = {
       projectId,
       id,
       slug: "",
       title: "",
-      dateCreated: todayStr,
-      dateUpdated: todayStr,
+      dateCreated: nowStr,
+      dateUpdated: nowStr,
       description: "",
       tags: [],
       draft: true,
@@ -186,7 +249,7 @@
     </button>
   </div>
 {:else if projectEntry.status === "ready"}
-  <div class="-mt-2 mb-4">
+  <div class="-mt-2 mb-4 flex items-center gap-2">
     <button
       class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 px-3 rounded-full"
       onclick={() => {
@@ -195,6 +258,122 @@
     >
       <Wrench class="icon" /> Edit
     </button>
+
+    <div class="ml-auto flex items-center gap-2">
+      <Popover open={optionsOpen} onclose={() => (optionsOpen = false)}>
+        {#snippet trigger()}
+          <button
+            class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 rounded-full relative"
+            aria-label="View options"
+            aria-haspopup="dialog"
+            aria-expanded={optionsOpen}
+            onclick={() => (optionsOpen = !optionsOpen)}
+          >
+            {#if listPrefs.order === "desc"}
+              <ArrowDownWideNarrow class="icon" />
+            {:else}
+              <ArrowUpNarrowWide class="icon" />
+            {/if}
+            {#if !isDefaultListPrefs(listPrefs)}
+              <span
+                aria-hidden="true"
+                class="absolute top-0 right-0 w-2 h-2 rounded-full bg-primary"
+              ></span>
+            {/if}
+          </button>
+        {/snippet}
+        <div class="flex flex-col gap-3">
+          <div class="flex flex-col gap-2">
+            <p class="text-xs font-medium text-muted-foreground">Sort</p>
+            <div class="flex gap-2">
+              <span class="relative inline-flex flex-1">
+                <select
+                  class="{selectClass} w-full"
+                  value={listPrefs.sort}
+                  onchange={onSortFieldChange}
+                  aria-label="Sort posts"
+                >
+                  <option value="dateCreated">Created</option>
+                  <option value="dateUpdated">Updated</option>
+                  <option value="datePublished">Published</option>
+                </select>
+                <ChevronDown
+                  class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
+                />
+              </span>
+              <button
+                class="btn-secondary text-sm shrink-0 px-3 py-1.5 rounded-full inline-flex items-center gap-1.5"
+                aria-label={listPrefs.order === "desc"
+                  ? "Sort direction: new first"
+                  : "Sort direction: old first"}
+                onclick={onToggleSortOrder}
+              >
+                {#if listPrefs.order === "desc"}
+                  <ArrowDownWideNarrow class="icon" />
+                {:else}
+                  <ArrowUpNarrowWide class="icon" />
+                {/if}
+                <!-- both labels stacked in one grid cell → button width stays
+                     the wider of the two, no resize when toggling -->
+                <span class="grid">
+                  <span
+                    class="col-start-1 row-start-1 {listPrefs.order === 'desc'
+                      ? ''
+                      : 'invisible'}">New first</span
+                  >
+                  <span
+                    class="col-start-1 row-start-1 {listPrefs.order === 'desc'
+                      ? 'invisible'
+                      : ''}">Old first</span
+                  >
+                </span>
+              </button>
+            </div>
+          </div>
+          <div class="flex flex-col gap-2">
+            <p class="text-xs font-medium text-muted-foreground">Filter</p>
+            <span class="relative inline-flex">
+              <select
+                class="{selectClass} w-full"
+                value={listPrefs.draft}
+                onchange={onDraftFilterChange}
+                aria-label="Filter by status"
+              >
+                <option value="all">All statuses</option>
+                <option value="drafts">Drafts</option>
+                <option value="published">Published</option>
+              </select>
+              <ChevronDown
+                class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
+              />
+            </span>
+            <span class="relative inline-flex">
+              <select
+                class="{selectClass} w-full"
+                value={listPrefs.page}
+                onchange={onPageFilterChange}
+                aria-label="Filter by type"
+              >
+                <option value="all">All content types</option>
+                <option value="posts">Posts</option>
+                <option value="pages">Pages</option>
+              </select>
+              <ChevronDown
+                class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground"
+              />
+            </span>
+          </div>
+          {#if !isDefaultListPrefs(listPrefs)}
+            <button
+              class="btn-secondary text-sm py-1.5 rounded-full w-full"
+              onclick={() => onPrefsChange({ ...DEFAULT_LIST_PREFS })}
+            >
+              Use default
+            </button>
+          {/if}
+        </div>
+      </Popover>
+    </div>
   </div>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
     <button
@@ -214,13 +393,20 @@
             onclick={() => changePage(1)}>Go to page 1</button
           >
         </p>
+      {:else if listPrefs.draft !== "all" || listPrefs.page !== "all"}
+        <p class="text-muted-foreground col-span-full">
+          No posts match the current filters.
+          <button class="text-primary underline ml-1" onclick={clearFilters}
+            >Clear filters</button
+          >
+        </p>
       {:else}
         <p class="text-muted-foreground col-span-full">
           No posts yet. Create your first post to get started.
         </p>
       {/if}
     {:else}
-      {#each posts.filter((p) => !p.deleted) as post (post.id)}
+      {#each posts as post (post.id)}
         <div
           class="card cursor-pointer hover:border-muted-foreground/50 relative overflow-hidden"
           role="button"
@@ -244,11 +430,14 @@
             <p
               class="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap"
             >
-              {#if !post.draft}
-                {#if post.datePublished}
-                  <span>{post.datePublished}</span>
-                {/if}
-              {:else}
+              {#if listPrefs.sort === "dateUpdated"}
+                <span>{formatPostDate(post.dateUpdated)}</span>
+              {:else if listPrefs.sort === "dateCreated"}
+                <span>{formatPostDate(post.dateCreated)}</span>
+              {:else if !post.draft && post.datePublished}
+                <span>{formatPostDate(post.datePublished)}</span>
+              {/if}
+              {#if post.draft}
                 <span
                   title="Draft"
                   class="text-xs h-5.5 w-5 font-serif italic text-center pb-1 flex items-end justify-center bg-muted-foreground/10 absolute top-0 right-2 bevel z-5 rounded-b-full"

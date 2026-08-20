@@ -77,18 +77,28 @@ export async function openExistingPost(page: Page, index = 0): Promise<string> {
   return page.url();
 }
 
+// REVISIT IF: flakes persist → add retries in playwright.config.ts;
+// if SyncIndicator's labels change, update the regex below.
+async function waitForSyncSettled(page: Page, timeout = 8_000) {
+  await expect(page.getByRole("status").first())
+    .toHaveAttribute("aria-label", /^(Synced|Sync failed|Offline)$/, {
+      timeout,
+    })
+    .catch(() => {});
+}
+
 export async function back(page: Page) {
   await page.getByRole("button", { name: "Back to posts" }).click();
   await page.waitForURL(
     (url) => url.pathname.split("/").filter(Boolean).length === 1,
     { timeout: 15_000 },
   );
-  await page.waitForTimeout(2000);
+  await waitForSyncSettled(page);
 }
 
 export async function save(page: Page) {
   await page.locator("header button.btn-primary").click();
-  await page.waitForTimeout(3000);
+  await waitForSyncSettled(page);
 }
 
 export async function getBody(page: Page): Promise<string> {

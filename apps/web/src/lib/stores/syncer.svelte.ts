@@ -1,6 +1,10 @@
 import { Syncer } from "$lib/sync/syncer";
-import { prefs, prefsReady } from "$lib/stores/prefs.svelte";
-import { projects, getProject } from "$lib/stores/projects.svelte";
+import { prefs, ensurePrefsReady } from "$lib/stores/prefs.svelte";
+import {
+  projects,
+  getProject,
+  ensureProjectsHydrated,
+} from "$lib/stores/projects.svelte";
 import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
 import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
 import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
@@ -38,12 +42,22 @@ const defaultLoadPostsOpts = {
   pageSize: POSTS_PAGE_SIZE,
 } satisfies ILoadPostsOpts;
 
+// Both post-loading paths need the prefs + projects stores hydrated before
+// reading them (a full page reload would otherwise race ahead of the IDB
+// hydration and return empty results).
+async function ensureStoresReady(): Promise<void> {
+  await Promise.all([ensurePrefsReady(), ensureProjectsHydrated()]);
+}
+
 export async function loadPosts(
   projectId: string,
   opts: ILoadPostsOpts = {},
 ): Promise<IPostRecord[]> {
-  await prefsReady;
-  const { pullOption, page, pageSize } = { ...defaultLoadPostsOpts, ...opts };
+  await ensureStoresReady();
+  const { pullOption, page, pageSize, listPrefs } = {
+    ...defaultLoadPostsOpts,
+    ...opts,
+  };
   const offset = (page - 1) * pageSize;
 
   const project = getProject(projectId);
@@ -85,7 +99,7 @@ export async function loadPosts(
     await dbSaveProject(project);
   }
 
-  return await dbGetPosts(projectId, { limit: pageSize, offset });
+  return await dbGetPosts(projectId, { limit: pageSize, offset, listPrefs });
 }
 
 export async function loadPost(
@@ -93,6 +107,7 @@ export async function loadPost(
   postId: string,
   opts: { forcePull?: boolean } = {},
 ): Promise<IPostRecord | null> {
+  await ensureStoresReady();
   if (opts.forcePull) {
     const project = getProject(projectId);
     if (project) {

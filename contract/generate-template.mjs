@@ -21,19 +21,19 @@ const outputDir = path.join(
 let zod = jsonSchemaToZod(schema, { module: "esm", name: "postsSchema" });
 
 // Post-process: json-schema-to-zod outputs a few things we need to adjust.
-// 1. Import from 'astro:content' instead of 'zod'
-zod = zod.replace('from "zod"', "from 'astro:content'");
+// 1. Import from 'astro/zod' ('astro:content's z export is deprecated)
+zod = zod.replace('from "zod"', "from 'astro/zod'");
 
 // 2. .strict() → .passthrough() (Astro content collections need this)
 zod = zod.replace(".strict()", ".passthrough()");
 
-// 3. z.string().date() → z.coerce.date() for fields with format: "date"
+// 3. z.string().date()/.datetime() → z.coerce.date() for date-ish fields
 const dateFields = Object.entries(schema.properties)
-  .filter(([, p]) => p.format === "date")
+  .filter(([, p]) => p.format === "date" || p.format === "date-time")
   .map(([name]) => name);
 
 for (const field of dateFields) {
-  zod = zod.replace(new RegExp(`"${field}": z\\.string\\(\\)\\.date\\(\\)`, "g"), `"${field}": z.coerce.date()`);
+  zod = zod.replace(new RegExp(`"${field}": z\\.string\\(\\)\\.(?:date|datetime)\\([^)]*\\)`, "g"), `"${field}": z.coerce.date()`);
 }
 
 // 4. Add header comment

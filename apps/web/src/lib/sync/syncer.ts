@@ -9,7 +9,7 @@ import { serializeMdx, parseMdx } from "$lib/parser";
 import { contentEqual } from "$lib/saver";
 import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
-import { commitTimestamp, today } from "$lib/shared/utils";
+import { commitTimestamp, now } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
 import { postFileExists, deletePostFile } from "$lib/fs";
 import {
@@ -278,7 +278,7 @@ export class Syncer {
                 Date.now(),
               );
             } else {
-              post.dateUpdated = today();
+              post.dateUpdated = now();
               const mdxContent = serializeMdx(post);
 
               const commitSha = await adapter.commitAndPush(

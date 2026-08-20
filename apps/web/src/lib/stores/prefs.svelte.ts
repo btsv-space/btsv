@@ -5,6 +5,12 @@ export const prefs = $state<{ value: IUserPreferences }>({
   value: { syncType: "api" as TSyncType, proxyUrl: "" },
 });
 
-export const prefsReady = dbGetPrefs().then((cached) => {
-  if (cached) prefs.value = cached;
-});
+let pendingPrefs: Promise<void> | null = null;
+
+/** Hydrate prefs from the IDB cache (once; subsequent calls reuse it). */
+export function ensurePrefsReady(): Promise<void> {
+  pendingPrefs ??= dbGetPrefs().then((cached) => {
+    if (cached) prefs.value = cached;
+  });
+  return pendingPrefs;
+}

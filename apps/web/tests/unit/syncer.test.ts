@@ -583,7 +583,7 @@ describe("Syncer", () => {
 
       expect(hook).toHaveBeenCalledTimes(1);
       const syncedPost = hook.mock.calls[0][2];
-      // Syncer mutates post.dateUpdated = today() before serializing for git,
+      // Syncer mutates post.dateUpdated = now() before serializing for git,
       // and the hook's syncedPost reflects post-mutation state.
       expect(syncedPost.dateUpdated).not.toBe("2026-06-01");
       expect(syncedPost.dirty).toBe(0);

@@ -13,13 +13,18 @@
     destroyCurrentSaver,
   } from "$lib/stores/currentSaver";
   import { type IPostRecord } from "$lib/shared/types";
-  import { today } from "$lib/shared/utils";
+  import {
+    now,
+    toDatetimeLocalValue,
+    fromDatetimeLocalValue,
+  } from "$lib/shared/utils";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import { ArrowLeft, Braces, PenLine, Save, Trash2 } from "@lucide/svelte";
   import Switch from "$lib/components/Switch.svelte";
   import { dbGetPost, dbGetPostBySlug, dbGetPostPage } from "$lib/db";
   import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
+  import { postsListPrefs } from "$lib/stores/postsListPrefs.svelte";
 
   const projectId = page.params.projectId!;
   const postId = page.params.postId!;
@@ -117,8 +122,20 @@
   }
 
   async function handleBack() {
-    const listPage = await dbGetPostPage(projectId, postId, POSTS_PAGE_SIZE);
-    goto(`/${projectId}?page=${listPage}&focus=${encodeURIComponent(postId)}`);
+    const listPage = await dbGetPostPage(
+      projectId,
+      postId,
+      POSTS_PAGE_SIZE,
+      postsListPrefs.get(projectId),
+    );
+    if (listPage == null) {
+      // not in the current filtered view (or deleted) — go to page 1
+      goto(`/${projectId}?page=1`);
+    } else {
+      goto(
+        `/${projectId}?page=${listPage}&focus=${encodeURIComponent(postId)}`,
+      );
+    }
   }
 
   function dismissError() {
@@ -130,6 +147,23 @@
     return tagsArr.join(", ");
   }
 
+  function editableSnapshot(
+    post: IPostRecord,
+    tags: string,
+    slug: string,
+  ): string {
+    return JSON.stringify({
+      title: post.title,
+      body: post.body,
+      description: post.description,
+      draft: post.draft,
+      page: post.page,
+      datePublished: post.datePublished,
+      tags,
+      slug,
+    });
+  }
+
   function handleTitleBlur() {
     if (!workingSlug && workingPost!.title) {
       workingSlug = deriveSlug(workingPost!.title);
@@ -139,7 +173,7 @@
   function handlePublishToggle(v: boolean) {
     workingPost!.draft = !v;
     if (v && !workingPost!.datePublished) {
-      workingPost!.datePublished = today();
+      workingPost!.datePublished = now();
     }
   }
 
@@ -167,8 +201,11 @@
       goto(`/${projectId}`);
       return;
     }
-    // snapshot the body as a primitive for the overwrite guard at the bottom
-    const cachedBody = cachedPost.body;
+    const cachedSnapshot = editableSnapshot(
+      cachedPost,
+      tagsArrToString(cachedPost.tags),
+      cachedPost.slug,
+    );
     workingPost = cachedPost;
     tagsInput = tagsArrToString(cachedPost.tags);
     workingSlug = cachedPost.slug;
@@ -210,8 +247,11 @@
       goto(`/${projectId}`);
       return;
     }
-    // adopt the fresh post only if user hasn't typed during the awaited pull
-    if (workingPost?.body === cachedBody) {
+    // adopt the fresh post only if the user hasn't made any edits
+    const userEdited =
+      !workingPost ||
+      editableSnapshot(workingPost, tagsInput, workingSlug) !== cachedSnapshot;
+    if (!userEdited) {
       workingPost = freshPost;
       tagsInput = tagsArrToString(freshPost.tags);
       workingSlug = freshPost.slug;
@@ -457,8 +497,13 @@
         >
           <span>Date</span>
           <input
-            type="date"
-            bind:value={workingPost.datePublished}
+            type="datetime-local"
+            value={toDatetimeLocalValue(workingPost.datePublished)}
+            onchange={(e) => {
+              workingPost!.datePublished = fromDatetimeLocalValue(
+                e.currentTarget.value,
+              );
+            }}
             class="px-3 py-2 border border-input rounded-md text-sm font-inherit text-foreground"
           />
         </label>

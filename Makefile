@@ -77,7 +77,10 @@ test-e2e: test-e2e-web
 
 test-e2e-web:
 	@echo "Running E2E tests (starting Go backend on :8090)..."
-	@set -a; [ -f .env.e2e ] && . .env.e2e; set +a; \
+	@kill $$(lsof -t -i :8090) 2>/dev/null || true; \
+	kill $$(lsof -t -i :5173) 2>/dev/null || true; \
+	sleep 1; \
+	set -a; [ -f .env.e2e ] && . .env.e2e; set +a; \
 	trap 'kill 0' EXIT; \
 	(cd apps/api && DATA_DIR=/tmp/btsv-e2e-test PORT=8090 go run ./cmd/server) & \
 	sleep 3; \

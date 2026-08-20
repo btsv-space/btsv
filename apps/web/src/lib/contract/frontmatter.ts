@@ -14,15 +14,15 @@ export interface BtsvPostFrontmatter {
    */
   title: string;
   /**
-   * Original creation date in YYYY-MM-DD format. Set once when the post is first created. Required.
+   * Original creation datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Set once when the post is first created. Required. Legacy day-precision values (YYYY-MM-DD) remain valid.
    */
   dateCreated: string;
   /**
-   * Last modification date in YYYY-MM-DD format. Updated every time the post is saved. Required.
+   * Last modification datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Updated every time the post is saved. Required. Legacy day-precision values (YYYY-MM-DD) remain valid.
    */
   dateUpdated: string;
   /**
-   * Publication date in YYYY-MM-DD format. Set once when the post is first published (draft becomes false). Optional — user-editable for backdating.
+   * Publication datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Set once when the post is first published (draft becomes false). Optional — user-editable for backdating. Legacy day-precision values (YYYY-MM-DD) remain valid.
    */
   datePublished?: string;
   /**

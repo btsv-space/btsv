@@ -5,11 +5,11 @@ import {
   type TParsedPost,
 } from "$lib/shared/types";
 import type { BtsvPostFrontmatter } from "$lib/contract/frontmatter";
-import { today } from "$lib/shared/utils";
+import { now } from "$lib/shared/utils";
 
 function toDateStr(val: unknown, fallback: string): string {
   if (val instanceof Date) {
-    return val.toISOString().split("T")[0];
+    return val.toISOString().replace(/\.\d{3}Z$/, "Z");
   }
   return String(val ?? fallback);
 }
@@ -34,8 +34,8 @@ export function parseMdx(raw: string, id: string): TParsedPost {
     id: String(fm.id ?? id),
     slug: String(fm.slug ?? ""),
     title: String(fm.title ?? ""),
-    dateCreated: toDateStr(fm.dateCreated, today()),
-    dateUpdated: toDateStr(fm.dateUpdated, today()),
+    dateCreated: toDateStr(fm.dateCreated, now()),
+    dateUpdated: toDateStr(fm.dateUpdated, now()),
     datePublished:
       fm.datePublished != null ? toDateStr(fm.datePublished, "") : undefined,
     description: String(fm.description ?? ""),

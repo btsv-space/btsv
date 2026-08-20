@@ -1,12 +1,16 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
-  import { projects, getProject } from "$lib/stores/projects.svelte";
+  import {
+    projects,
+    getProject,
+    projectEntryWithStatus,
+    ensureProjectsHydrated,
+  } from "$lib/stores/projects.svelte";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { syncer, canSync } from "$lib/stores/syncer.svelte";
-  import { checkProjectDirExists } from "$lib/fs";
   import { api } from "$lib/api";
-  import { dbGetProjects, dbSaveProjects, dbSavePrefs } from "$lib/db";
+  import { dbSaveProjects, dbSavePrefs } from "$lib/db";
   import type { TProjectEntry } from "$lib/shared/types";
   import { onMount, onDestroy } from "svelte";
 
@@ -16,41 +20,19 @@
 
   let prefFetchGeneration = 0;
 
-  async function projectEntryWithStatus(
-    p: { id: string } & Partial<TProjectEntry>,
-  ): Promise<TProjectEntry> {
-    const exists = await checkProjectDirExists(p.id);
-    console.log(
-      `[/:layout] projectEntryWithStatus: ${p.id} dirExists=${exists}`,
-    );
-    return {
-      ...p,
-      status: exists ? "ready" : "unknown",
-      error: "",
-    } as TProjectEntry;
-  }
-
   async function loadProjects() {
-    // 1. Read from cache immediately so the UI never blinks
-    try {
-      const cached = await dbGetProjects();
-      if (cached.length > 0) {
-        projects.value = await Promise.all(
-          cached.map((p) => projectEntryWithStatus(p)),
-        );
-      }
-    } catch (err) {
-      console.error("[/:layout] failed to load cached projects:", err);
-    }
+    // Cache hydration is owned by the projects store; emptiness-triggered,
+    // so re-login re-reads the cache and stays blink-free.
+    await ensureProjectsHydrated();
 
-    // 2. Show UI immediately — don't wait for network
+    // Show UI immediately — don't wait for network
     projectsReady = true;
 
-    // 3. Start syncer — internal ops no-op until canSync is true
+    // Start syncer — internal ops no-op until canSync is true
     syncer.start();
     console.log("[/:layout] syncer started");
 
-    // 4. Background: fetch prefs, then projects, with backoff retry
+    // Background: fetch prefs, then projects, with backoff retry
     void fetchPrefsThenProjects();
   }
 

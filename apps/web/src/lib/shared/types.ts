@@ -200,6 +200,14 @@ export interface ILoadPostsOpts {
   pullOption?: "always" | "check" | "never";
   page?: number;
   pageSize?: number;
+  listPrefs?: IPostsListPrefs;
+}
+
+export interface IPostsListPrefs {
+  sort: TPostSortField;
+  order: TSortOrder;
+  draft: TDraftFilter;
+  page: TPageFilter;
 }
 
 // ── Type aliases ───────────────────────────────────
@@ -209,6 +217,12 @@ export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 export type TGitStatus = string;
 
 export type TSyncType = "git" | "api";
+
+// canonical value lists live in the Constants section below; types derive
+export type TPostSortField = (typeof SORT_FIELDS)[number];
+export type TSortOrder = (typeof SORT_ORDERS)[number];
+export type TDraftFilter = (typeof DRAFT_FILTERS)[number];
+export type TPageFilter = (typeof PAGE_FILTERS)[number];
 
 export type TSyncHook = (
   projectId?: string,
@@ -235,7 +249,16 @@ export type TProjectEntry = IProject & {
   storedRemoteSha?: string;
 };
 
-// ── Key-set constants ──────────────────────────────
+// ── Constants ──────────────────────────────────────
+
+export const SORT_FIELDS = [
+  "dateCreated",
+  "dateUpdated",
+  "datePublished",
+] as const;
+export const SORT_ORDERS = ["asc", "desc"] as const;
+export const DRAFT_FILTERS = ["all", "drafts", "published"] as const;
+export const PAGE_FILTERS = ["all", "pages", "posts"] as const;
 
 const FRONTMATTER_FIELDS = {
   title: true,

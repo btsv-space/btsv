@@ -11,18 +11,18 @@
 		},
 		"dateCreated": {
 			"type": "string",
-			"format": "date",
-			"description": "Original creation date in YYYY-MM-DD format. Set once when the post is first created. Required."
+			"format": "date-time",
+			"description": "Original creation datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Set once when the post is first created. Required. Legacy day-precision values (YYYY-MM-DD) remain valid."
 		},
 		"dateUpdated": {
 			"type": "string",
-			"format": "date",
-			"description": "Last modification date in YYYY-MM-DD format. Updated every time the post is saved. Required."
+			"format": "date-time",
+			"description": "Last modification datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Updated every time the post is saved. Required. Legacy day-precision values (YYYY-MM-DD) remain valid."
 		},
 		"datePublished": {
 			"type": "string",
-			"format": "date",
-			"description": "Publication date in YYYY-MM-DD format. Set once when the post is first published (draft becomes false). Optional — user-editable for backdating."
+			"format": "date-time",
+			"description": "Publication datetime as ISO 8601 UTC (e.g. 2026-08-19T14:30:22Z). Set once when the post is first published (draft becomes false). Optional — user-editable for backdating. Legacy day-precision values (YYYY-MM-DD) remain valid."
 		},
 		"description": {
 			"type": "string",

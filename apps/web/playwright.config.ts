@@ -5,6 +5,8 @@ export default defineConfig({
   fullyParallel: true,
   workers: 4,
   timeout: 120_000,
+  // no retries by design; if E2E flakes resurface, `retries: 1` is the
+  // safety net (see waitForSyncSettled in tests/e2e/helpers.ts)
   globalTeardown: "./tests/e2e/global-teardown.ts",
   projects: [
     {
