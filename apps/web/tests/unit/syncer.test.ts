@@ -993,16 +993,17 @@ describe("Syncer", () => {
       expect(mockSaveProject).toHaveBeenCalledWith(project);
     });
 
-    it("persists pushed commit sha to project + IDB after push", async () => {
+    it("does not advance storedRemoteSha after push (pull owns the compare base)", async () => {
       const post = makeDirtyPost({ draft: false });
       mockGetDirtyPosts.mockResolvedValue([post]);
       mockAdapterCommitAndPush.mockResolvedValue("sha-push");
 
       const project = makeMockProjectEntry();
+      project.storedRemoteSha = "sha-base";
       await syncer.push(project);
 
-      expect(project.storedRemoteSha).toBe("sha-push");
-      expect(mockSaveProject).toHaveBeenCalledWith(project);
+      expect(project.storedRemoteSha).toBe("sha-base");
+      expect(mockSaveProject).not.toHaveBeenCalled();
     });
 
     it("does not persist storedRemoteSha when push commits nothing", async () => {

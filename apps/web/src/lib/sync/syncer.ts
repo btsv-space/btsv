@@ -242,7 +242,6 @@ export class Syncer {
         let allOk = true;
         let anyPublished = false;
         let lastToken: string | null = null;
-        let pushedSha: string | null = null;
 
         for (const post of dirty) {
           const op = post.deleted ? "delete" : "save";
@@ -260,14 +259,7 @@ export class Syncer {
 
           try {
             if (post.deleted) {
-              const commitSha = await adapter.commitDeletion(
-                project.id,
-                post.id,
-                message,
-                token,
-              );
-
-              if (commitSha) pushedSha = commitSha;
+              await adapter.commitDeletion(project.id, post.id, message, token);
 
               await dbDeletePost(project.id, post.id);
 
@@ -281,15 +273,13 @@ export class Syncer {
               post.dateUpdated = now();
               const mdxContent = serializeMdx(post);
 
-              const commitSha = await adapter.commitAndPush(
+              await adapter.commitAndPush(
                 project.id,
                 post.id,
                 mdxContent,
                 message,
                 token,
               );
-
-              if (commitSha) pushedSha = commitSha;
 
               const syncedPost: IPostRecord = { ...post, dirty: 0 };
 
@@ -333,10 +323,9 @@ export class Syncer {
           }
         }
 
-        if (allOk && pushedSha) {
-          project.storedRemoteSha = pushedSha;
-          await dbSaveProject(project);
-        }
+        // storedRemoteSha is NOT advanced on push: the pushed commit's
+        // history may contain unpulled commits from other devices, and
+        // pulls compare from storedRemoteSha — only pull moves the base.
 
         if (allOk) {
           this.#setStatus(project.id, ESyncState.SYNCED);

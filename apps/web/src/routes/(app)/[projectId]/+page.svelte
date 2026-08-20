@@ -431,11 +431,20 @@
               class="flex items-center gap-2 text-sm text-muted-foreground mt-1 flex-wrap"
             >
               {#if listPrefs.sort === "dateUpdated"}
-                <span>{formatPostDate(post.dateUpdated)}</span>
+                <span
+                  ><span class="italic">updated</span>
+                  {formatPostDate(post.dateUpdated)}</span
+                >
               {:else if listPrefs.sort === "dateCreated"}
-                <span>{formatPostDate(post.dateCreated)}</span>
+                <span
+                  ><span class="italic">created</span>
+                  {formatPostDate(post.dateCreated)}</span
+                >
               {:else if !post.draft && post.datePublished}
-                <span>{formatPostDate(post.datePublished)}</span>
+                <span
+                  ><span class="italic">published</span>
+                  {formatPostDate(post.datePublished)}</span
+                >
               {/if}
               {#if post.draft}
                 <span

@@ -18,6 +18,15 @@ export async function register(page: Page) {
   await page.getByLabel("Password").fill("testpassword123");
   await page.getByRole("button", { name: "Create account" }).click();
   await page.waitForURL("**/projects", { timeout: 10_000 });
+  return u;
+}
+
+export async function login(page: Page, username: string) {
+  await page.goto("http://localhost:5173/login");
+  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Password").fill("testpassword123");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("**/projects", { timeout: 10_000 });
 }
 
 export async function createProject(page: Page): Promise<string> {
@@ -159,6 +168,32 @@ async function waitForFileState(
   }
   throw new Error(
     `file ${shouldExist ? "does not exist" : "still exists"} on remote (${branch}) after ${timeoutMs * 2}ms for post ${postId}`,
+  );
+}
+
+export async function waitForRemoteContent(
+  request: APIRequestContext,
+  postId: string,
+  needle: string,
+  branch = "staging",
+  timeoutMs = 30000,
+): Promise<void> {
+  const repoPath = TEST_REPO_URL.replace("https://github.com/", "");
+  const url = `https://api.github.com/repos/${repoPath}/contents/src/content/posts/${postId}.mdx?ref=${branch}`;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await request.get(url, {
+      headers: { Authorization: `Bearer ${TEST_GIT_TOKEN}` },
+    });
+    if (res.ok()) {
+      const { content } = await res.json();
+      const text = Buffer.from(content ?? "", "base64").toString("utf8");
+      if (text.includes(needle)) return;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  throw new Error(
+    `remote file ${postId} never contained "${needle}" after ${timeoutMs}ms`,
   );
 }
 
