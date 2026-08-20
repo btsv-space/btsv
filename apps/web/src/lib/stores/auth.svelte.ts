@@ -1,3 +1,4 @@
+import { browser } from "$app/environment";
 import { goto } from "$app/navigation";
 import { api } from "$lib/api";
 import {
@@ -173,3 +174,6 @@ export async function logout() {
     teardownSession();
   }
 }
+
+// Synchronous init at module scope — auth state must be correct before first render.
+if (browser) void ensureInit();

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { isAuthenticated, ensureInit } from "$lib/stores/auth.svelte";
   import {
     projects,
     getProject,
@@ -15,7 +13,6 @@
   import { onMount, onDestroy } from "svelte";
 
   let { children } = $props();
-  let sessionReady = $state(false);
   let projectsReady = $state(false);
 
   let prefFetchGeneration = 0;
@@ -131,13 +128,6 @@
   }
 
   onMount(async () => {
-    await ensureInit();
-    sessionReady = true;
-    if (!isAuthenticated.value) {
-      goto("/login");
-      return;
-    }
-
     await loadProjects();
   });
 
@@ -157,13 +147,7 @@
   });
 </script>
 
-{#if !sessionReady}
-  <p class="text-center text-muted-foreground p-8">Checking session…</p>
-{:else if !isAuthenticated.value}
-  <p class="text-center text-muted-foreground p-8">
-    Unauthenticated, redirecting to log in page…
-  </p>
-{:else if !projectsReady}
+{#if !projectsReady}
   <p class="text-center text-muted-foreground p-8">Loading projects…</p>
 {:else}
   {@render children()}

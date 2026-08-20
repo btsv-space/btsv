@@ -1,10 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import {
-    isAuthenticated,
-    ensureInit,
-    persistAuth,
-  } from "$lib/stores/auth.svelte";
+  import { persistAuth } from "$lib/stores/auth.svelte";
   import { api } from "$lib/api";
   import {
     generateUserKeys,
@@ -16,7 +12,6 @@
   } from "$lib/crypto";
   import { IV_LENGTH } from "$lib/shared/constants";
   import { ERoute } from "$lib/shared/types";
-  import { onMount } from "svelte";
 
   console.log("[/login] mounted");
 
@@ -26,13 +21,6 @@
   let stayLoggedIn = $state(false);
   let error = $state("");
   let loading = $state(false);
-
-  onMount(async () => {
-    await ensureInit();
-    if (isAuthenticated.value) {
-      goto(ERoute.HOME, { replaceState: true });
-    }
-  });
 
   async function login(uname: string, pwd: string) {
     const result = await api.auth.login(uname, pwd, stayLoggedIn);
