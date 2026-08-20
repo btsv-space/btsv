@@ -344,6 +344,14 @@
     const el = containerEl!;
     function onTouchmove(e: TouchEvent) {
       if (window.innerWidth >= 768) return;
+      const t = e.target;
+      // Selection-handle drag (a selection exists before the drag starts) — let iOS drive it
+      if (
+        (t instanceof HTMLTextAreaElement || t instanceof HTMLInputElement) &&
+        t.selectionStart !== t.selectionEnd
+      ) {
+        return;
+      }
       let node = e.target as Element | null;
       while (node && node !== el) {
         const style = getComputedStyle(node);
