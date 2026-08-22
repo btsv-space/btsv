@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/btsv/btsv/api/internal/middleware"
-	"github.com/btsv/btsv/api/internal/model"
-	"github.com/btsv/btsv/api/internal/store"
+	"github.com/btsv-space/btsv/api/internal/middleware"
+	"github.com/btsv-space/btsv/api/internal/model"
+	"github.com/btsv-space/btsv/api/internal/store"
 )
 
 type PreferencesHandler struct {

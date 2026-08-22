@@ -13,7 +13,7 @@ linters:
 
 linters-settings:
   goimports:
-    local-prefixes: github.com/btsv/btsv/api
+    local-prefixes: github.com/btsv-space/btsv/api
 
 issues:
   exclude-rules:

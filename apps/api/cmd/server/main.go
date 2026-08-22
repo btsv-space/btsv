@@ -14,9 +14,9 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/btsv/btsv/api/internal/handler"
-	"github.com/btsv/btsv/api/internal/middleware"
-	"github.com/btsv/btsv/api/internal/store"
+	"github.com/btsv-space/btsv/api/internal/handler"
+	"github.com/btsv-space/btsv/api/internal/middleware"
+	"github.com/btsv-space/btsv/api/internal/store"
 )
 
 func main() {

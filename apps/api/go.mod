@@ -1,4 +1,4 @@
-module github.com/btsv/btsv/api
+module github.com/btsv-space/btsv/api
 
 go 1.25.5
 

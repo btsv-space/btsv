@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json-schema.org/draft/2020-12/schema",
-	"$id": "https://github.com/btsv/btsv/contract/frontmatter.schema.json",
+	"$id": "https://github.com/btsv-space/btsv/contract/frontmatter.schema.json",
 	"title": "btsv Post Frontmatter",
 	"description": "Canonical frontmatter schema shared by the editor and all builder templates. additionalProperties is false for strict typing — custom fields are still captured by the editor's parser (extractExtra) during content ingestion.",
 	"type": "object",

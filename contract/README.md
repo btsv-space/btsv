@@ -1,5 +1,7 @@
 # btsv Content Contract
 
+<sub>README current as of [`2f3dec8`](https://github.com/btsv-space/btsv/commit/2f3dec8) (2026-08-21).</sub>
+
 The canonical contract between the editor and all builder templates. This is the
 single source of truth for what frontmatter fields a post has.
 
@@ -39,15 +41,18 @@ validated by the template's Zod schema:
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `title` | `string` | yes | Post title |
-| `dateCreated` | `date` | yes | Original creation date (`YYYY-MM-DD`) |
-| `dateUpdated` | `date` | yes | Last modification date (`YYYY-MM-DD`) |
-| `datePublished` | `date` | no | Publication date (`YYYY-MM-DD`) |
+| `dateCreated` | `datetime` | yes | Original creation date |
+| `dateUpdated` | `datetime` | yes | Last modification date |
+| `datePublished` | `datetime` | no | Publication date |
 | `description` | `string` | no | SEO/social preview |
 | `tags` | `string[]` | no | Tag list |
 | `draft` | `boolean` | no | Exclude from production builds |
 | `id` | `string` | no | Internal identifier (auto-generated) |
 | `slug` | `string` | no | Custom URL slug |
 | `page` | `boolean` | no | Standalone page (About, Contact), excluded from listings/RSS |
+
+Datetimes are ISO 8601 UTC (e.g. `2026-08-19T14:30:22Z`); legacy day-precision
+values (`YYYY-MM-DD`) remain valid.
 
 ### Custom fields (escape hatch)
 
@@ -89,14 +94,14 @@ export const collections = { posts };
 
 ### In the editor (apps/web)
 
-`apps/web/package.json` `generate` script runs `json2ts` over
+`apps/web/package.json` `generate-frontmatter` script runs `json2ts` over
 `frontmatter.schema.json` to produce typed TypeScript interfaces.
 
 ## Adding a new core field
 
 1. Add it to `contract/frontmatter.schema.json`
 2. Run `pnpm generate-template` from `contract/`
-3. Run `pnpm generate` from `apps/web/`
+3. Run `pnpm generate-frontmatter` from `apps/web/`
 4. Update editor UI and parser in `apps/web/` to handle the new field
 5. Run `pnpm check` from `apps/web/` to verify type correctness
 

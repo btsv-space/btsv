@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/btsv/btsv/api/internal/middleware"
-	"github.com/btsv/btsv/api/internal/store"
+	"github.com/btsv-space/btsv/api/internal/middleware"
+	"github.com/btsv-space/btsv/api/internal/store"
 )
 
 func setupTest(t *testing.T) (*store.DB, *AuthHandler) {

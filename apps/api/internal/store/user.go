@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/btsv/btsv/api/internal/model"
+	"github.com/btsv-space/btsv/api/internal/model"
 )
 
 func newID() string {

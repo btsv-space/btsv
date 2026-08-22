@@ -3,7 +3,7 @@ package store
 import (
 	"database/sql"
 
-	"github.com/btsv/btsv/api/internal/model"
+	"github.com/btsv-space/btsv/api/internal/model"
 )
 
 func (db *DB) CreateUserPreferences(userID string) error {

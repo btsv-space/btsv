@@ -1,8 +1,18 @@
 # btsv
 
+<sub>README current as of [`2f3dec8`](https://github.com/btsv-space/btsv/commit/2f3dec8) (2026-08-21).</sub>
+
 A web-based markdown+ document editor. Write posts in a SvelteKit PWA, persist them
 to a git repo via isomorphic-git, and publish through Astro (or Hugo, etc.) deployed
 to Netlify or Cloudflare.
+
+## Features
+
+- **Local-first** — posts live in IndexedDB; sync to the git repo happens in the background
+- **Editor** — markdown+ with autosave, offline editing, and tags autocomplete
+- **Post list** — sort by edited / created / published date; filter by tag, draft, or page
+- **Publishing model** — drafts excluded from production builds; `page` posts excluded from listings/RSS
+- **PWA** — installable, works offline
 
 ## Architecture
 
@@ -40,7 +50,7 @@ to Netlify or Cloudflare.
 This repo uses git submodules for the builder templates. Use a recursive clone:
 
 ```sh
-git clone --recurse-submodules https://github.com/btsv/btsv.git
+git clone --recurse-submodules https://github.com/btsv-space/btsv.git
 ```
 
 If you've already cloned without `--recurse-submodules`:
@@ -117,6 +127,13 @@ make build
 make lint
 ```
 
+### Test
+
+```sh
+make test           # Unit tests (web, api, proxy)
+make test-e2e-web   # Playwright E2E — boots API + vite itself (uses .env.e2e)
+```
+
 ## Deployment (Docker)
 
 The three services are dockerized for production deployment:
@@ -134,15 +151,8 @@ The three services are dockerized for production deployment:
 ### Build & run
 
 ```sh
-# Generate secrets and add them to .env.production
-echo "ENCRYPTION_KEY=$(openssl rand -hex 32)" >> .env.production
-
 docker compose --env-file .env.production up --build -d
 ```
-
-The `ENCRYPTION_KEY` is used for AES-GCM encryption of stored git tokens. If
-unset it's auto-generated on first startup — but a fixed value is needed to
-keep existing tokens decryptable across restarts.
 
 ### Environment
 
@@ -157,7 +167,6 @@ builds instead of Docker.
 | `VITE_PROXY_URL` | web build arg | Git CORS proxy URL baked into the SPA bundle |
 | `ALLOW_ORIGIN` | api, proxy env vars | CORS origin header (the web app's domain) |
 | `PORT` | api & proxy env vars | Internal listen port |
-| `ENCRYPTION_KEY` | api env var | AES-GCM key for token encryption |
 | `DATA_DIR` | api env var | SQLite database path (persisted via named volume) |
 | `COOKIE_DOMAIN` | api env var | Session cookie domain; when set, also enables the `Secure` flag. Use `.example.com` in production; leave empty in dev |
 
@@ -208,18 +217,25 @@ that defines the frontmatter shape.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `title` | `string` | yes | Post title |
-| `date` | `date` | yes | Publication date (`YYYY-MM-DD`) |
+| `dateCreated` | `datetime` | yes | Original creation date |
+| `dateUpdated` | `datetime` | yes | Last modified date |
+| `datePublished` | `datetime` | no | Publication date (set when a draft is first published) |
 | `description` | `string` | no | SEO/social preview |
 | `tags` | `string[]` | no | Tag list |
 | `draft` | `boolean` | no | Exclude from production builds |
+| `id` | `string` | no | Internal identifier (auto-generated) |
 | `slug` | `string` | no | Custom URL slug |
-| `updated` | `date` | no | Last modified date |
+| `page` | `boolean` | no | Standalone page, excluded from listings/RSS |
+
+Datetimes are ISO 8601 UTC (e.g. `2026-08-19T14:30:22Z`); legacy day-precision
+values (`YYYY-MM-DD`) remain valid.
 
 ### Custom fields (escape hatch)
 
-The schema uses `additionalProperties: true`. Users can add **any extra fields** to
-their frontmatter — they pass through the editor untouched and are available in
-builder templates. Core fields get dedicated editor UI; custom fields don't (yet).
+The schema is strict (`additionalProperties: false`), but users can add **any extra
+fields** to their frontmatter — the editor's parser captures them into `extra`,
+passes them through untouched, and builder templates can read them. Core fields get
+dedicated editor UI; custom fields don't (yet).
 
 ### Markdown+
 
@@ -240,10 +256,11 @@ The API base URL defaults to `http://localhost:8080/api` and can be overridden w
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/api/auth/register` | — | `{ username, password }` → `{ id, username, createdAt }` |
-| `POST` | `/api/auth/login` | — | `{ username, password }` → user, sets `session` cookie |
+| `POST` | `/api/auth/register` | — | `{ username, password, encryptedDek, kekSalt }` → user |
+| `POST` | `/api/auth/login` | — | `{ username, password }` → `{ user, encryptedDek, kekSalt }`, sets `session` cookie |
 | `POST` | `/api/auth/logout` | — | Clears `session` cookie |
-| `GET` | `/api/auth/me` | session | → `{ id, username, createdAt }` or `null` |
+| `GET` | `/api/auth/me` | session | → `{ id, username, encryptedDek, kekSalt }` or `null` |
+| `POST` | `/api/auth/change-password` | session | `{ oldPassword, newPassword, encryptedDek, kekSalt }` → 204 |
 
 ### Projects
 
@@ -251,8 +268,15 @@ The API base URL defaults to `http://localhost:8080/api` and can be overridden w
 |---|---|---|---|
 | `GET` | `/api/projects` | session | → `[{ id, name, repoUrl, createdAt }]` |
 | `POST` | `/api/projects` | session | `{ name, repoUrl }` → project |
-| `GET` | `/api/projects/:id/secret` | session | → `{ gitToken }` |
-| `POST` | `/api/projects/:id/secret` | session | `{ gitToken }` → 204 |
+| `GET` | `/api/projects/:id/secret` | session | → `{ ciphertext, iv }` (client-encrypted git token) |
+| `POST` | `/api/projects/:id/secret` | session | `{ ciphertext, iv }` → 204 |
+
+### User preferences
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/user/preferences` | session | → preferences JSON |
+| `PATCH` | `/api/user/preferences` | session | Partial update → preferences JSON |
 
 ### Health
 
@@ -262,10 +286,12 @@ The API base URL defaults to `http://localhost:8080/api` and can be overridden w
 
 ## Security
 
-- Git tokens are encrypted at rest with AES-GCM (key from `ENCRYPTION_KEY` env var
-  or generated on startup)
-- Tokens are transmitted only over authenticated API calls, used in-memory by the
-  frontend, and never written to `localStorage` or IndexedDB
+- Git tokens are encrypted **client-side** (AES-GCM) with a per-user data key (DEK)
+  before being sent to the API — the server only ever stores ciphertext
+- The DEK is wrapped by a key derived from the user's password (PBKDF2) and stored
+  as `encryptedDek` + `kekSalt`; changing the password re-wraps the DEK
+- Plaintext tokens are used in-memory by the frontend and never written to
+  `localStorage` or IndexedDB
 - Session cookies are `HttpOnly`, `SameSite=Strict`, random 256-bit tokens with 14-day expiry
 
 ## Project structure
@@ -278,7 +304,8 @@ btsv/
 │   ├── proxy/                            Go CORS proxy (GitHub / GitLab)
 
 ├── builder-templates/
-│   └── btsv-template-astro/              Astro blog template (git submodule)
+│   ├── btsv-template-astro/              Astro blog template (git submodule)
+│   └── btsv-template-hugo/               Hugo blog template (git submodule)
 ├── contract/
 │   ├── frontmatter.schema.json           Canonical JSON Schema
 │   └── README.md                         Contract specification

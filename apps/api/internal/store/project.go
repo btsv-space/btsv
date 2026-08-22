@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/btsv/btsv/api/internal/model"
+	"github.com/btsv-space/btsv/api/internal/model"
 )
 
 func normalizeRepoURL(raw string) string {

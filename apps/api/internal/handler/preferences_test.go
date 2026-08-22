@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/btsv/btsv/api/internal/middleware"
+	"github.com/btsv-space/btsv/api/internal/middleware"
 )
 
 func TestGetPreferencesReturnsDefault(t *testing.T) {

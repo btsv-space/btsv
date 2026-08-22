@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btsv/btsv/api/internal/model"
+	"github.com/btsv-space/btsv/api/internal/model"
 )
 
 func setupTest(t *testing.T) *DB {
