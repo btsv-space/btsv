@@ -5,17 +5,19 @@ import {
   FS_DB_NAME,
 } from "$lib/shared/constants";
 
-let fsPromise: ReturnType<
-  typeof import("@isomorphic-git/lightning-fs").default
-> | null = null;
+type LightningFSInstance = InstanceType<
+  typeof import("@isomorphic-git/lightning-fs")
+>;
 
-export async function getFS() {
-  if (!fsPromise) {
-    const { default: lightningFS } =
+let fsInstance: LightningFSInstance | null = null;
+
+export async function getFS(): Promise<LightningFSInstance> {
+  if (!fsInstance) {
+    const { default: LightningFS } =
       await import("@isomorphic-git/lightning-fs");
-    fsPromise = new lightningFS(FS_DB_NAME);
+    fsInstance = new LightningFS(FS_DB_NAME);
   }
-  return fsPromise;
+  return fsInstance;
 }
 
 export function getDir(projectId: string): string {

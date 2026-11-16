@@ -1,4 +1,5 @@
 import { IV_LENGTH } from "$lib/shared/constants";
+import type { TBytes } from "$lib/shared/types";
 
 const PBKDF2_ITERATIONS = 100_000;
 const PBKDF2_HASH = "SHA-256";
@@ -12,7 +13,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(s: string): Uint8Array {
+function base64ToBytes(s: string): TBytes {
   const binary = atob(s);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -21,14 +22,14 @@ function base64ToBytes(s: string): Uint8Array {
   return bytes;
 }
 
-async function importDEK(dek: Uint8Array): Promise<CryptoKey> {
+async function importDEK(dek: TBytes): Promise<CryptoKey> {
   return crypto.subtle.importKey("raw", dek, { name: "AES-GCM" }, false, [
     "encrypt",
     "decrypt",
   ]);
 }
 
-export function generateUserKeys(): { dek: Uint8Array; kekSalt: Uint8Array } {
+export function generateUserKeys(): { dek: TBytes; kekSalt: TBytes } {
   return {
     dek: crypto.getRandomValues(new Uint8Array(32)),
     kekSalt: crypto.getRandomValues(new Uint8Array(16)),
@@ -37,7 +38,7 @@ export function generateUserKeys(): { dek: Uint8Array; kekSalt: Uint8Array } {
 
 export async function deriveKEK(
   password: string,
-  salt: Uint8Array,
+  salt: TBytes,
 ): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -58,9 +59,9 @@ export async function deriveKEK(
 }
 
 export async function wrapDEK(
-  dek: Uint8Array,
+  dek: TBytes,
   kek: CryptoKey,
-): Promise<{ encrypted: Uint8Array; iv: Uint8Array }> {
+): Promise<{ encrypted: TBytes; iv: TBytes }> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const ciphertext = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
@@ -71,10 +72,10 @@ export async function wrapDEK(
 }
 
 export async function unwrapDEK(
-  encrypted: Uint8Array,
-  iv: Uint8Array,
+  encrypted: TBytes,
+  iv: TBytes,
   kek: CryptoKey,
-): Promise<Uint8Array> {
+): Promise<TBytes> {
   const plaintext = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv },
     kek,
@@ -85,8 +86,8 @@ export async function unwrapDEK(
 
 export async function encryptToken(
   token: string,
-  dek: Uint8Array,
-): Promise<{ ciphertext: Uint8Array; iv: Uint8Array }> {
+  dek: TBytes,
+): Promise<{ ciphertext: TBytes; iv: TBytes }> {
   const key = await importDEK(dek);
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
   const enc = new TextEncoder();
@@ -99,9 +100,9 @@ export async function encryptToken(
 }
 
 export async function decryptToken(
-  ciphertext: Uint8Array,
-  iv: Uint8Array,
-  dek: Uint8Array,
+  ciphertext: TBytes,
+  iv: TBytes,
+  dek: TBytes,
 ): Promise<string> {
   const key = await importDEK(dek);
   const plaintext = await crypto.subtle.decrypt(
@@ -117,7 +118,7 @@ export function dekToBase64(dek: Uint8Array): string {
   return bytesToBase64(dek);
 }
 
-export function dekFromBase64(s: string): Uint8Array {
+export function dekFromBase64(s: string): TBytes {
   return base64ToBytes(s);
 }
 
@@ -125,6 +126,6 @@ export function bytesToApi(bytes: Uint8Array): string {
   return bytesToBase64(bytes);
 }
 
-export function bytesFromApi(s: string): Uint8Array {
+export function bytesFromApi(s: string): TBytes {
   return base64ToBytes(s);
 }

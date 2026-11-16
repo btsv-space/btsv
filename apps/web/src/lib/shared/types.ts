@@ -212,6 +212,8 @@ export interface IPostsListPrefs {
 
 // ── Type aliases ───────────────────────────────────
 
+export type TBytes = Uint8Array<ArrayBuffer>;
+
 export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 
 export type TGitStatus = string;

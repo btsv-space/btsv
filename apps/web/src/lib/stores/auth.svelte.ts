@@ -12,6 +12,7 @@ import {
   ERoute,
   type IUser,
   type IStoredAuth,
+  type TBytes,
   type TSyncType,
 } from "$lib/shared/types";
 import { SvelteMap } from "svelte/reactivity";
@@ -22,7 +23,7 @@ import { syncStatus } from "$lib/stores/syncStatus.svelte";
 
 export const currentUser = $state<{ value: IUser | null }>({ value: null });
 export const isAuthenticated = $state<{ value: boolean }>({ value: false });
-export const dek = $state<{ value: Uint8Array | null }>({ value: null });
+export const dek = $state<{ value: TBytes | null }>({ value: null });
 
 export const gitTokenCache = new SvelteMap<string, string>();
 
@@ -58,7 +59,7 @@ function readStoredAuth(): IStoredAuth | null {
   }
 }
 
-function writeStoredAuth(dekValue: Uint8Array, user: IUser | null): void {
+function writeStoredAuth(dekValue: TBytes, user: IUser | null): void {
   if (typeof localStorage === "undefined") return;
   const payload: IStoredAuth = {
     dek: dekToBase64(dekValue),
@@ -141,12 +142,12 @@ export function ensureInit() {
   return initPromise;
 }
 
-export function getDEK(): Uint8Array {
+export function getDEK(): TBytes {
   if (!dek.value) throw new Error("DEK not available — please log in again");
   return dek.value;
 }
 
-export function persistAuth(user: IUser, dekValue: Uint8Array): void {
+export function persistAuth(user: IUser, dekValue: TBytes): void {
   dek.value = dekValue;
   currentUser.value = user;
   isAuthenticated.value = true;
