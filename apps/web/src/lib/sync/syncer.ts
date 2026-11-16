@@ -70,10 +70,12 @@ export class Syncer {
     opType: ESyncerOps,
   ): Promise<T> {
     const prev = this.projectQueue.get(projectId)?.tail ?? Promise.resolve();
-    const next = prev.catch(() => {}).then(fn);
+    const next = prev.then(fn);
 
+    // never-rejecting queue/bookkeeping chain.
+    const settled = next.catch(() => {});
     // when the operation is done, this marks it as no longer in-flight
-    next.finally(() => {
+    settled.finally(() => {
       const q = this.projectQueue.get(projectId);
       if (q?.lastPromise === next) {
         this.projectQueue.set(projectId, { ...q, lastOpResolved: true });
@@ -81,7 +83,7 @@ export class Syncer {
     });
 
     this.projectQueue.set(projectId, {
-      tail: next.catch(() => {}),
+      tail: settled,
       lastPromise: next,
       lastOp: opType,
       lastOpResolved: false,
@@ -216,7 +218,7 @@ export class Syncer {
             ESyncState.ERROR,
             err instanceof Error ? err.message : "Initial pull failed",
           );
-          return [];
+          throw err;
         }
       },
       ESyncerOps.INITIAL_PULL,

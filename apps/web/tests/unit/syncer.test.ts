@@ -927,6 +927,22 @@ describe("Syncer", () => {
     });
   });
 
+  describe("initialPull", () => {
+    it("rejects when the adapter fails and reports ERROR", async () => {
+      mockAdapterInitialPull.mockRejectedValue(new Error("clone failed"));
+
+      const project = makeMockProjectEntry();
+
+      await expect(syncer.initialPull(project)).rejects.toThrow("clone failed");
+
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        { state: "error", errorMsg: "clone failed" },
+        null,
+      );
+    });
+  });
+
   describe("storedRemoteSha persistence", () => {
     it("persists checkRemote headSha to project + IDB after a successful pull", async () => {
       mockAdapterCheckRemote.mockResolvedValue({
