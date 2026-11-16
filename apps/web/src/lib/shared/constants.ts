@@ -21,6 +21,8 @@ export const CREATION_DATE_FIELD = "_creationDate";
 
 export const IV_LENGTH = 12;
 
+export const PASSCODE_MIN_LENGTH = 6;
+
 export const DEFAULT_GIT_BRANCH = "staging";
 export const MAIN_GIT_BRANCH = "main";
 
