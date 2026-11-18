@@ -9,13 +9,14 @@ import type { IPostRecord } from "$lib/shared/types";
  *
  * One database version timeline per file: seed at v7, then the dynamic
  * $lib/db import opens at the current DB_VERSION and runs every
- * migration block (v8 date-sort indexes, v9 by_tag multiEntry). Each
- * block's backfill is asserted in its own test. A separate 8→9 timeline
- * can't share this file — the version only moves up, and the
+ * migration block (v8 date-sort indexes, v9 by_tag multiEntry, v10 secrets
+ * store). Each block's backfill is asserted in its own test. A separate
+ * 8→9 timeline can't share this file — the version only moves up, and the
  * module-cached connection holds the upgraded database.
  */
 let dbGetPosts: typeof import("$lib/db").dbGetPosts;
 let dbGetProjectTags: typeof import("$lib/db").dbGetProjectTags;
+let dbGetGitToken: typeof import("$lib/db").dbGetGitToken;
 
 beforeAll(async () => {
   // Open at version 7 with the v7 end-state schema.
@@ -74,6 +75,7 @@ beforeAll(async () => {
   const mod = await import("$lib/db");
   dbGetPosts = mod.dbGetPosts;
   dbGetProjectTags = mod.dbGetProjectTags;
+  dbGetGitToken = mod.dbGetGitToken;
 });
 
 describe("db migrations", () => {
@@ -84,5 +86,9 @@ describe("db migrations", () => {
 
   it("v9: pre-existing posts' tags are queryable after upgrade", async () => {
     expect(await dbGetProjectTags("proj-1")).toEqual(["js", "kit", "svelte"]);
+  });
+
+  it("v10: secrets store is created by the upgrade", async () => {
+    expect(await dbGetGitToken("proj-1")).toBeUndefined();
   });
 });

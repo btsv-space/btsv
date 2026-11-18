@@ -70,6 +70,13 @@ export interface IDeviceLockRecord {
   wrappedDek: string;
 }
 
+export interface ISecretRecord {
+  projectId: string;
+  iv: string;
+  ciphertext: string;
+  updatedAt: number;
+}
+
 export interface IPostEntry {
   id: string;
   content?: string;

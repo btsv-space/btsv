@@ -2,6 +2,7 @@ import { openDB, type IDBPDatabase } from "idb";
 import type {
   IPostRecord,
   IPostsListPrefs,
+  ISecretRecord,
   IUserPreferences,
   TPostSortField,
   TProjectEntry,
@@ -9,7 +10,7 @@ import type {
 import { DEFAULT_LIST_PREFS, matchesListPrefs } from "$lib/postsList";
 
 const DB_NAME = "btsv";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 const SORT_INDEXES: Record<TPostSortField, string> = {
   dateCreated: "by_project_dateCreated",
@@ -97,6 +98,11 @@ function getDB(): Promise<IDBPDatabase> {
           if (!store.indexNames.contains("by_tag")) {
             // single-key: the IDB spec forbids compound+multiEntry
             store.createIndex("by_tag", "tags", { multiEntry: true });
+          }
+        }
+        if (oldVersion < 10) {
+          if (!db.objectStoreNames.contains("secrets")) {
+            db.createObjectStore("secrets", { keyPath: "projectId" });
           }
         }
       },
@@ -266,4 +272,18 @@ export async function dbGetPrefs(): Promise<IUserPreferences | undefined> {
 export async function dbSavePrefs(userPrefs: IUserPreferences): Promise<void> {
   const db = await getDB();
   await db.put("preferences", { ...userPrefs, id: "default" });
+}
+
+// ── Secrets (encrypted per-project tokens) ────────
+
+export async function dbSaveGitToken(record: ISecretRecord): Promise<void> {
+  const db = await getDB();
+  await db.put("secrets", { ...record });
+}
+
+export async function dbGetGitToken(
+  projectId: string,
+): Promise<ISecretRecord | undefined> {
+  const db = await getDB();
+  return db.get("secrets", projectId);
 }
