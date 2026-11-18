@@ -61,6 +61,15 @@ export interface IUserPreferences {
   proxyUrl: string;
 }
 
+export interface IDeviceLockRecord {
+  v: 1;
+  type: "passcode";
+  kekSalt: string;
+  iterations: number;
+  wrapIv: string;
+  wrappedDek: string;
+}
+
 export interface IPostEntry {
   id: string;
   content?: string;
@@ -219,6 +228,8 @@ export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 export type TGitStatus = string;
 
 export type TSyncType = "git" | "api";
+
+export type TDeviceLockState = "unconfigured" | "locked" | "unlocked";
 
 // canonical value lists live in the Constants section below; types derive
 export type TPostSortField = (typeof SORT_FIELDS)[number];

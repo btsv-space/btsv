@@ -4,7 +4,8 @@
   import { api } from "$lib/api";
   import {
     generateUserKeys,
-    deriveKEK,
+    deriveKek,
+    LEGACY_KEK_ITERATIONS,
     wrapDEK,
     unwrapDEK,
     bytesFromApi,
@@ -31,7 +32,7 @@
     const iv = blob.slice(0, IV_LENGTH);
     const encryptedDek = blob.slice(IV_LENGTH);
 
-    const kek = await deriveKEK(pwd, kekSalt);
+    const kek = await deriveKek(pwd, kekSalt, LEGACY_KEK_ITERATIONS);
     const plainDek = await unwrapDEK(encryptedDek, iv, kek);
 
     persistAuth(result.user, plainDek);
@@ -41,7 +42,7 @@
   async function register(uname: string, pwd: string) {
     const { dek: plainDek, kekSalt } = generateUserKeys();
 
-    const kek = await deriveKEK(pwd, kekSalt);
+    const kek = await deriveKek(pwd, kekSalt, LEGACY_KEK_ITERATIONS);
     const { encrypted, iv } = await wrapDEK(plainDek, kek);
 
     const blob = new Uint8Array(iv.length + encrypted.length);

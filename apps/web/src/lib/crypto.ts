@@ -1,12 +1,13 @@
 import { IV_LENGTH } from "$lib/shared/constants";
 import type { TBytes } from "$lib/shared/types";
 
-const PBKDF2_ITERATIONS = 100_000;
-const PASSCODE_PBKDF2_ITERATIONS = 600_000;
+/** Legacy account-password KEK iterations (deleted with the backend). */
+export const LEGACY_KEK_ITERATIONS = 100_000;
+export const KEK_PBKDF2_ITERATIONS = 600_000;
 const PBKDF2_HASH = "SHA-256";
 const KEY_LENGTH_BITS = 256;
 
-function bytesToBase64(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
@@ -14,7 +15,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function base64ToBytes(s: string): TBytes {
+export function base64ToBytes(s: string): TBytes {
   const binary = atob(s);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
@@ -89,10 +90,6 @@ export function generateUserKeys(): { dek: TBytes; kekSalt: TBytes } {
   };
 }
 
-export function deriveKEK(password: string, salt: TBytes): Promise<CryptoKey> {
-  return deriveWrapKey(password, salt, PBKDF2_ITERATIONS);
-}
-
 export async function wrapDEK(
   dek: TBytes,
   kek: CryptoKey,
@@ -142,10 +139,10 @@ export function bytesFromApi(s: string): TBytes {
   return base64ToBytes(s);
 }
 
-export function derivePasscodeKey(
+export function deriveKek(
   passcode: string,
   salt: TBytes,
-  iterations: number = PASSCODE_PBKDF2_ITERATIONS,
+  iterations: number = KEK_PBKDF2_ITERATIONS,
 ): Promise<CryptoKey> {
   return deriveWrapKey(passcode, salt, iterations);
 }
