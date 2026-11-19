@@ -50,6 +50,8 @@ describe("device key", () => {
     expect(record.kekSalt).toBeTruthy();
     expect(record.wrapIv).toBeTruthy();
     expect(record.wrappedDek).toBeTruthy();
+
+    expect(deviceLock.getDek()).toHaveLength(32);
   });
 
   it("rejects passcodes shorter than the minimum", async () => {
@@ -64,6 +66,7 @@ describe("device key", () => {
     vi.resetModules();
     const second = await importDevice();
     expect(second.deviceLock.state).toBe("locked");
+    expect(() => second.deviceLock.getDek()).toThrow("Device is locked");
   });
 
   it("cold start: wrong passcode stays locked, correct passcode unlocks", async () => {

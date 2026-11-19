@@ -30,6 +30,11 @@ class DeviceLock {
     return this.deviceDek ? "unlocked" : "locked";
   }
 
+  getDek(): TBytes {
+    if (!this.deviceDek) throw new Error("Device is locked");
+    return this.deviceDek;
+  }
+
   async setup(passcode: string): Promise<void> {
     this.#assertPasscode(passcode);
     const dek = randomBytes(DEK_BYTES);
