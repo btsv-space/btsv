@@ -17,9 +17,6 @@ class PostsListPrefsStore {
 
   #load(): SvelteMap<string, IPostsListPrefs> {
     const map = new SvelteMap<string, IPostsListPrefs>();
-    if (typeof localStorage === "undefined") {
-      return map;
-    }
     try {
       const raw = localStorage.getItem(POSTS_LIST_PREFS_STORAGE_KEY);
       if (!raw) {
@@ -36,9 +33,6 @@ class PostsListPrefsStore {
   }
 
   #persist(): void {
-    if (typeof localStorage === "undefined") {
-      return;
-    }
     try {
       if (this.map.size === 0) {
         localStorage.removeItem(POSTS_LIST_PREFS_STORAGE_KEY);

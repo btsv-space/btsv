@@ -46,9 +46,6 @@ class SyncStatusStore {
 
   #load(): SvelteMap<string, ISyncStatus> {
     const map = new SvelteMap<string, ISyncStatus>();
-    if (typeof localStorage === "undefined") {
-      return map;
-    }
     try {
       const raw = localStorage.getItem(SYNC_STATUS_STORAGE_KEY);
       if (!raw) {
@@ -79,9 +76,6 @@ class SyncStatusStore {
   }
 
   #persist(): void {
-    if (typeof localStorage === "undefined") {
-      return;
-    }
     try {
       if (this.map.size === 0) {
         localStorage.removeItem(SYNC_STATUS_STORAGE_KEY);
