@@ -1,9 +1,7 @@
 <script lang="ts">
   import Modal from "$lib/components/Modal.svelte";
   import GitTokenField from "$lib/components/GitTokenField.svelte";
-  import { api } from "$lib/api";
-  import { encryptToken, bytesToApi } from "$lib/crypto";
-  import { getDEK, gitTokenCache } from "$lib/stores/auth.svelte";
+  import { saveGitToken } from "$lib/secrets";
   import { Check } from "@lucide/svelte";
 
   let {
@@ -38,13 +36,7 @@
     formSubmitting = true;
 
     try {
-      const dek = getDEK();
-      const { ciphertext, iv } = await encryptToken(gitToken, dek);
-      await api.projects.setSecret(projectId, {
-        ciphertext: bytesToApi(ciphertext),
-        iv: bytesToApi(iv),
-      });
-      gitTokenCache.set(projectId, gitToken);
+      await saveGitToken(projectId, gitToken);
       saved = true;
       formSubmitting = false;
       onsaved?.();
