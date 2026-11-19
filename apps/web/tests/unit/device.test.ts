@@ -19,6 +19,7 @@ function mockLocalStorage() {
 }
 
 const PASSCODE = "correct horse battery";
+const NEW_PASSCODE = "staple staple staple";
 
 async function importDevice() {
   return import("$lib/stores/device.svelte");
@@ -82,6 +83,53 @@ describe("device key", () => {
 
     expect(await second.deviceLock.unlock(PASSCODE)).toBe(true);
     expect(second.deviceLock.state).toBe("unlocked");
+  });
+
+  it("lock drops the DEK from memory but keeps the record", async () => {
+    const { deviceLock } = await importDevice();
+    await deviceLock.setup(PASSCODE);
+    deviceLock.lock();
+
+    expect(deviceLock.state).toBe("locked");
+    expect(() => deviceLock.getDek()).toThrow();
+    expect(localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it("changePasscode re-wraps the same DEK", async () => {
+    const { deviceLock } = await importDevice();
+    await deviceLock.setup(PASSCODE);
+    const dek = deviceLock.getDek();
+
+    await deviceLock.changePasscode(PASSCODE, NEW_PASSCODE);
+    expect(deviceLock.getDek()).toEqual(dek);
+
+    vi.resetModules();
+    const cold = await importDevice();
+    expect(await cold.deviceLock.unlock(PASSCODE)).toBe(false);
+    expect(await cold.deviceLock.unlock(NEW_PASSCODE)).toBe(true);
+    expect(cold.deviceLock.getDek()).toEqual(dek);
+  });
+
+  it("changePasscode requires an unlocked device", async () => {
+    const { deviceLock } = await importDevice();
+    await deviceLock.setup(PASSCODE);
+    deviceLock.lock();
+
+    await expect(
+      deviceLock.changePasscode(PASSCODE, NEW_PASSCODE),
+    ).rejects.toThrow("Device is locked");
+  });
+
+  it("changePasscode rejects an incorrect current passcode", async () => {
+    const { deviceLock } = await importDevice();
+    await deviceLock.setup(PASSCODE);
+    const before = localStorage.getItem(DEVICE_LOCK_STORAGE_KEY);
+
+    await expect(
+      deviceLock.changePasscode("wrong passcode", NEW_PASSCODE),
+    ).rejects.toThrow("Current passcode is incorrect");
+
+    expect(localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)).toBe(before);
   });
 
   it("reset removes the record and returns to unconfigured", async () => {

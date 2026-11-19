@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Lock, TriangleAlert } from "@lucide/svelte";
   import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
+  import { SECURITY_COPY } from "$lib/shared/copy";
   import { wipeLocalData } from "$lib/reset";
   import { deviceLock } from "$lib/stores/device.svelte";
 
@@ -54,8 +55,7 @@
       <p
         class="text-sm text-foreground bg-destructive/10 border border-destructive/40 rounded-md p-3 leading-relaxed m-0"
       >
-        All local data will be wiped. Posts already synced to GitHub can be
-        re-cloned but unpushed changes will be lost.
+        {SECURITY_COPY.wipeWarning}
       </p>
 
       <div class="flex justify-between gap-2">
@@ -82,12 +82,11 @@
 
       {#if isSetup}
         <p class="text-sm text-muted-foreground m-0">
-          Posts live on this device and sync to GitHub. Set a passcode to
-          encrypt your GitHub tokens at rest.
+          {SECURITY_COPY.deviceIntro}
+          {SECURITY_COPY.passcodePurpose}
         </p>
         <p class="text-sm text-muted-foreground m-0">
-          Note: there is no recovery! If you forget it, you reset the device and
-          re-enter your tokens. Any unsynced changes will be lost.
+          {SECURITY_COPY.noRecovery}
         </p>
       {:else}
         <p class="text-sm text-muted-foreground m-0">

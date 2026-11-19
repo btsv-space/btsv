@@ -1,20 +1,25 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
-  import { api } from "$lib/api";
   import { prefs } from "$lib/stores/prefs.svelte";
-  import { projects } from "$lib/stores/projects.svelte";
-  import { syncer } from "$lib/stores/syncer.svelte";
-  import { currentUser, logout } from "$lib/stores/auth.svelte";
+  import { deviceLock } from "$lib/stores/device.svelte";
   import { dbSavePrefs } from "$lib/db";
-  import type { TSyncType } from "$lib/shared/types";
+  import { wipeLocalData } from "$lib/reset";
+  import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
+  import { SECURITY_COPY } from "$lib/shared/copy";
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
-  let syncType = $state<TSyncType>(prefs.value.syncType);
-  let proxyUrl = $state(prefs.value.proxyUrl);
+  let deviceName = $state(prefs.value.deviceName);
   let saveState = $state<SaveState>("idle");
   let saveMsg = $state("");
-  let prevSyncType = $state<TSyncType>(prefs.value.syncType);
+
+  let currentPasscode = $state("");
+  let newPasscode = $state("");
+  let confirmPasscode = $state("");
+  let passcodeError = $state("");
+  let passcodeBusy = $state(false);
+
+  let confirmingWipe = $state(false);
 
   let dismissTimeout: ReturnType<typeof setTimeout> | undefined;
 
@@ -32,88 +37,186 @@
     }
   }
 
-  async function handleChange() {
+  async function saveDeviceName() {
     showToast("saving", "Saving...");
-
     try {
-      const updated = await api.preferences.update({
-        syncType,
-        proxyUrl: proxyUrl || undefined,
-      });
-      prefs.value = updated;
-      await dbSavePrefs(updated);
-
-      if (syncType !== prevSyncType) {
-        prevSyncType = syncType;
-        for (const project of projects.value) {
-          if (project.status === "ready") {
-            syncer
-              .pull(project)
-              .catch((err) =>
-                console.error(
-                  `[settings] auto-pull failed for ${project.id}:`,
-                  err,
-                ),
-              );
-          }
-        }
-      }
-
+      const next = {
+        ...prefs.value,
+        deviceName: deviceName.trim() || "local",
+      };
+      prefs.value = next;
+      await dbSavePrefs(next);
+      deviceName = next.deviceName;
       showToast("success", "Saved");
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : "Failed to save");
-      console.error("[settings] failed to update:", err);
+      console.error("[settings] failed to save device name:", err);
+    }
+  }
+
+  async function handleChangePasscode(e: Event) {
+    e.preventDefault();
+    passcodeError = "";
+
+    if (newPasscode !== confirmPasscode) {
+      passcodeError = "Passcodes do not match";
+      return;
+    }
+
+    passcodeBusy = true;
+    try {
+      await deviceLock.changePasscode(currentPasscode, newPasscode);
+      currentPasscode = "";
+      newPasscode = "";
+      confirmPasscode = "";
+      showToast("success", "Passcode updated");
+    } catch (err) {
+      passcodeError =
+        err instanceof Error ? err.message : "Failed to update passcode";
+    } finally {
+      passcodeBusy = false;
     }
   }
 </script>
 
 <div class="flex flex-col items-center">
   <div class="w-full max-w-2xl flex flex-col gap-6">
-    <span>
-      Logged in as <span class="font-mono px-1"
-        >{currentUser.value?.username}</span
-      >
-    </span>
-    <div class="card flex flex-col gap-6">
-      <label for="sync-type" class="text-[15px] font-semibold block"
-        >Sync Type
+    <section class="card flex flex-col gap-4">
+      <div>
+        <h2 class="text-[15px] font-semibold m-0">Device</h2>
         <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
-          Choose how posts are synced with Git repositories.
+          This name tags commits made from this device.
         </p>
-        <select
-          id="sync-type"
-          bind:value={syncType}
-          onchange={handleChange}
-          disabled={saveState === "saving"}
+      </div>
+      <label
+        class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+      >
+        <span>Device name</span>
+        <input
+          type="text"
+          bind:value={deviceName}
+          onchange={saveDeviceName}
+          placeholder="local"
           class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
-        >
-          <option value="git">Git (isomorphic via cors-proxy)</option>
-          <option value="api">API (GitHub REST)</option>
-        </select>
+        />
       </label>
-      {#if syncType === "git"}
-        <label for="proxy-url" class="text-[15px] font-semibold block">
-          CORS Proxy URL
-          <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
-            Custom CORS proxy URL for isomorphic-git (default:
-            http://localhost:9999).
+    </section>
+
+    <section class="card flex flex-col gap-4">
+      <div>
+        <h2 class="text-[15px] font-semibold m-0">Security</h2>
+        <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
+          {SECURITY_COPY.passcodePurpose}
+          {SECURITY_COPY.noRecovery}
+        </p>
+      </div>
+
+      <form class="flex flex-col gap-3" onsubmit={handleChangePasscode}>
+        {#if passcodeError}
+          <p
+            class="bg-destructive/10 text-destructive text-sm rounded-md px-3 py-2"
+          >
+            {passcodeError}
           </p>
+        {/if}
+        <label
+          class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+        >
+          <span>Current passcode</span>
           <input
-            id="proxy-url"
-            type="url"
-            bind:value={proxyUrl}
-            onchange={handleChange}
-            disabled={saveState === "saving"}
-            placeholder="http://localhost:9999"
+            type="password"
+            autocomplete="current-password"
+            bind:value={currentPasscode}
+            required
+            disabled={passcodeBusy}
             class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
           />
         </label>
-      {/if}
-    </div>
+        <label
+          class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+        >
+          <span>New passcode</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            bind:value={newPasscode}
+            required
+            minlength={PASSCODE_MIN_LENGTH}
+            disabled={passcodeBusy}
+            class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+          />
+        </label>
+        <label
+          class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+        >
+          <span>Confirm new passcode</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            bind:value={confirmPasscode}
+            required
+            minlength={PASSCODE_MIN_LENGTH}
+            disabled={passcodeBusy}
+            class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+          />
+        </label>
+        <div class="flex justify-between gap-2">
+          <button
+            class="btn-secondary"
+            type="button"
+            onclick={() => deviceLock.lock()}
+          >
+            Lock now
+          </button>
+          <button class="btn-primary" type="submit" disabled={passcodeBusy}>
+            {passcodeBusy ? "Updating..." : "Change passcode"}
+          </button>
+        </div>
+      </form>
+    </section>
 
-    <button class="btn-destructive text-base w-full" onclick={() => logout()}
-      >Logout</button
-    >
+    <section class="card flex flex-col gap-4">
+      <div>
+        <h2 class="text-[15px] font-semibold m-0">Data</h2>
+        <p class="text-sm text-muted-foreground font-normal m-0 mb-3">
+          {SECURITY_COPY.wipeWarning}
+        </p>
+      </div>
+
+      {#if confirmingWipe}
+        <div
+          class="text-sm text-foreground bg-destructive/10 border border-destructive/40 rounded-md p-3 leading-relaxed"
+        >
+          <p class="m-0 mb-3">
+            {SECURITY_COPY.deleteAllConfirm}
+          </p>
+          <div class="flex justify-between gap-2">
+            <button
+              class="btn-destructive"
+              type="button"
+              onclick={wipeLocalData}
+            >
+              Delete everything
+            </button>
+            <button
+              class="btn-secondary"
+              type="button"
+              onclick={() => (confirmingWipe = false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      {:else}
+        <button
+          class="btn-destructive self-start"
+          type="button"
+          onclick={() => (confirmingWipe = true)}
+        >
+          Delete all local data
+        </button>
+      {/if}
+    </section>
   </div>
 
   <footer class="text-xs text-muted-foreground/50 font-mono mt-8 text-center">

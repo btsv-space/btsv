@@ -65,6 +65,40 @@ class DeviceLock {
     }
   }
 
+  lock(): void {
+    this.deviceDek = null;
+  }
+
+  async changePasscode(
+    verifyPasscode: string,
+    newPasscode: string,
+  ): Promise<void> {
+    this.#assertPasscode(newPasscode);
+    const deviceDek = this.deviceDek;
+    if (!deviceDek) throw new Error("Device is locked");
+    const record = this.#readRecord();
+    if (!record) throw new Error("No device lock configured");
+
+    const verifyKek = await deriveKek(
+      verifyPasscode,
+      base64ToBytes(record.kekSalt),
+      record.iterations,
+    );
+
+    try {
+      // Verifies the current passcode: only the right KEK decrypts the record.
+      await decryptBytes(
+        base64ToBytes(record.wrappedDek),
+        base64ToBytes(record.wrapIv),
+        verifyKek,
+      );
+    } catch {
+      throw new Error("Current passcode is incorrect");
+    }
+
+    this.#writeRecord(await this.#buildRecord(newPasscode, deviceDek));
+  }
+
   reset(): void {
     localStorage.removeItem(DEVICE_LOCK_STORAGE_KEY);
     this.deviceDek = null;
