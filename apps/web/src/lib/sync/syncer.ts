@@ -8,7 +8,6 @@ import {
 import { serializeMdx, parseMdx } from "$lib/parser";
 import { contentEqual } from "$lib/saver";
 import { ensureGitToken } from "$lib/secrets";
-import { currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { commitTimestamp, now } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
@@ -19,13 +18,14 @@ import {
   type IPostEntry,
   type IPostRecord,
   type ISyncerProjectQueueValue,
+  type IUserPreferences,
   type TProjectEntry,
   type TSyncHook,
   type ISyncerConfig,
 } from "$lib/shared/types";
 
-function getUsername(): string {
-  return currentUser.value?.username ?? "unknown";
+function getDeviceName(prefs: IUserPreferences): string {
+  return prefs.deviceName?.trim() || "local";
 }
 
 export class Syncer {
@@ -237,7 +237,7 @@ export class Syncer {
         }
 
         this.#setStatus(project.id, ESyncState.SYNCING_PUSH);
-        const username = getUsername();
+        const deviceName = getDeviceName(this.config.getPrefs());
         const adapter = await createSyncAdapter(project);
         let allOk = true;
         let anyPublished = false;
@@ -255,7 +255,7 @@ export class Syncer {
           if (!post.draft) anyPublished = true;
 
           const ts = commitTimestamp();
-          const message = `${APP_NAMESPACE}-${username}-${project.id}-${post.id}-${op}-${ts}`;
+          const message = `${APP_NAMESPACE}-${deviceName}-${project.id}-${post.id}-${op}-${ts}`;
 
           try {
             if (post.deleted) {

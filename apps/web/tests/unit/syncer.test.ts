@@ -16,10 +16,6 @@ const {
   mockGetPost,
   mockSerializeMdx,
   mockParseMdx,
-  mockDecryptToken,
-  mockBytesFromApi,
-  mockGetSecret,
-  mockGetDEK,
   mockEnsureGitToken,
   mockAdapterCommitAndPush,
   mockAdapterCommitDeletion,
@@ -38,10 +34,6 @@ const {
   mockGetPost: vi.fn(),
   mockSerializeMdx: vi.fn(),
   mockParseMdx: vi.fn(),
-  mockDecryptToken: vi.fn(),
-  mockBytesFromApi: vi.fn(),
-  mockGetSecret: vi.fn(),
-  mockGetDEK: vi.fn(),
   mockEnsureGitToken: vi.fn().mockResolvedValue("decrypted-token"),
   mockAdapterCommitAndPush: vi.fn(),
   mockAdapterCommitDeletion: vi.fn(),
@@ -70,24 +62,6 @@ vi.mock("$lib/fs", () => ({
 vi.mock("$lib/parser", () => ({
   serializeMdx: mockSerializeMdx,
   parseMdx: mockParseMdx,
-}));
-
-vi.mock("$lib/crypto", () => ({
-  decryptToken: mockDecryptToken,
-  bytesFromApi: mockBytesFromApi,
-}));
-
-vi.mock("$lib/api", () => ({
-  api: {
-    projects: {
-      getSecret: mockGetSecret,
-    },
-  },
-}));
-
-vi.mock("$lib/stores/auth.svelte", () => ({
-  getDEK: mockGetDEK,
-  currentUser: { value: { username: "testuser" } },
 }));
 
 vi.mock("$lib/secrets", () => ({
@@ -120,7 +94,11 @@ function makeDirtyPost(overrides: Partial<IPostRecord> = {}): IPostRecord {
 function makeConfig(getProjects?: () => TProjectEntry[]) {
   const onSyncStatus = vi.fn();
   return {
-    getPrefs: () => ({ syncType: "git" as TSyncType, proxyUrl: "" }),
+    getPrefs: () => ({
+      syncType: "git" as TSyncType,
+      proxyUrl: "",
+      deviceName: "testuser",
+    }),
     getProjects: getProjects ?? (() => []),
     canSync: () => true,
     onSyncStatus,
@@ -178,10 +156,6 @@ describe("Syncer", () => {
     mockDeletePost.mockReset();
     mockGetPost.mockReset();
     mockSerializeMdx.mockReset();
-    mockDecryptToken.mockReset();
-    mockBytesFromApi.mockReset();
-    mockGetSecret.mockReset();
-    mockGetDEK.mockReset();
     mockAdapterCommitAndPush.mockReset();
     mockAdapterCommitDeletion.mockReset();
     mockAdapterCheckRemote.mockReset();
@@ -205,12 +179,6 @@ describe("Syncer", () => {
       lastCommitTime: undefined,
     });
     mockEnsureGitToken.mockResolvedValue("decrypted-token");
-    mockDecryptToken.mockResolvedValue("decrypted-token");
-    mockBytesFromApi.mockImplementation(
-      (s: string) => new Uint8Array(s.length),
-    );
-    mockGetSecret.mockResolvedValue({ ciphertext: "abc", iv: "def" });
-    mockGetDEK.mockReturnValue(new Uint8Array(32));
     mockCreateSyncAdapter.mockResolvedValue(makeMockAdapter());
 
     mockParseMdx.mockImplementation((_content: string, id: string) => ({

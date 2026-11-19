@@ -162,7 +162,11 @@ function teardownSession(): void {
   gitTokenCache.clear();
   projects.value = [];
   syncStatus.clear();
-  prefs.value = { syncType: "api" as TSyncType, proxyUrl: "" };
+  prefs.value = {
+    syncType: "api" as TSyncType,
+    proxyUrl: "",
+    deviceName: "local",
+  };
   goto(ERoute.LOGIN, { replaceState: true });
 }
 

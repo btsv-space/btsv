@@ -59,6 +59,7 @@ export interface ISyncStatus {
 export interface IUserPreferences {
   syncType: TSyncType;
   proxyUrl: string;
+  deviceName: string;
 }
 
 export interface IDeviceLockRecord {
