@@ -88,6 +88,9 @@ vi.mock("$lib/api", () => ({
 vi.mock("$lib/stores/auth.svelte", () => ({
   getDEK: mockGetDEK,
   currentUser: { value: { username: "testuser" } },
+}));
+
+vi.mock("$lib/secrets", () => ({
   ensureGitToken: mockEnsureGitToken,
 }));
 

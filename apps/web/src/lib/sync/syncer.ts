@@ -7,7 +7,8 @@ import {
 } from "$lib/db";
 import { serializeMdx, parseMdx } from "$lib/parser";
 import { contentEqual } from "$lib/saver";
-import { ensureGitToken, currentUser } from "$lib/stores/auth.svelte";
+import { ensureGitToken } from "$lib/secrets";
+import { currentUser } from "$lib/stores/auth.svelte";
 import { APP_NAMESPACE } from "$lib/shared/constants";
 import { commitTimestamp, now } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
