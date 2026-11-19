@@ -8,7 +8,7 @@ import {
 import { dbGetPost, dbGetPosts } from "$lib/db";
 import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
 import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
-import { setProjectCommitTime } from "$lib/stores/recentProject";
+import { projectCommits } from "$lib/stores/projectCommits.svelte";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
 import { getCurrentSaver } from "$lib/stores/currentSaver";
 
@@ -32,7 +32,7 @@ export const syncer = new Syncer({
 
 syncer.addAfterSyncHook((projectId, postId, syncedPost, lastCommitTime) => {
   if (projectId != null && lastCommitTime != null) {
-    setProjectCommitTime(projectId, lastCommitTime);
+    projectCommits.set(projectId, lastCommitTime);
   }
 });
 

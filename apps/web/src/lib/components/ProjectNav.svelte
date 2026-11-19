@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { projects, getProject } from "$lib/stores/projects.svelte";
-  import { getProjectCommits } from "$lib/stores/recentProject";
+  import { projectCommits } from "$lib/stores/projectCommits.svelte";
   import SyncIndicator from "$lib/components/SyncIndicator.svelte";
   import Marker from "$lib/components/Marker.svelte";
   import { ChevronDown } from "@lucide/svelte";
@@ -32,10 +32,9 @@
   });
 
   const sortedProjects = $derived.by(() => {
-    const commits = getProjectCommits();
     return [...projects.value].sort((a, b) => {
-      const ta = commits[a.id] ?? 0;
-      const tb = commits[b.id] ?? 0;
+      const ta = projectCommits.get(a.id) ?? 0;
+      const tb = projectCommits.get(b.id) ?? 0;
       if (ta !== tb) return tb - ta;
       return a.name.localeCompare(b.name);
     });
