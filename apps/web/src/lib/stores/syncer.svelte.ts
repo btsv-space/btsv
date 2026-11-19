@@ -12,12 +12,9 @@ import { projectCommits } from "$lib/stores/projectCommits.svelte";
 import { syncStatus } from "$lib/stores/syncStatus.svelte";
 import { getCurrentSaver } from "$lib/stores/currentSaver";
 
-export const canSync = { value: false };
-
 export const syncer = new Syncer({
   getPrefs: () => prefs,
   getProjects: () => projects.value,
-  canSync: () => canSync.value,
   isPostEditing: (projectId, postId) => {
     const currentSaver = getCurrentSaver();
     return (

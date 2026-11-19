@@ -159,7 +159,6 @@ export interface ICurrentSaver {
 export interface ISyncerConfig {
   getPrefs: () => IPreferences;
   getProjects: () => TProjectEntry[];
-  canSync: () => boolean;
   isPostEditing?(projectId: string, postId: string): boolean;
   onSyncStatus?(
     projectId: string,

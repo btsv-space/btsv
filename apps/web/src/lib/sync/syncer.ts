@@ -95,7 +95,6 @@ export class Syncer {
   // ── Operations ──
 
   async pull(project: TProjectEntry): Promise<IPostRecord[]> {
-    if (!this.config.canSync()) return [];
     const q = this.projectQueue.get(project.id);
     // if the previous queue op is an active pull, just return that
     if (q?.lastOp === ESyncerOps.PULL && !q.lastOpResolved && q.lastPromise) {
@@ -179,7 +178,6 @@ export class Syncer {
     project: TProjectEntry,
     tokenOverride?: string,
   ): Promise<IPostRecord[]> {
-    // Not gated by canSync: caller just succeeded with api.projects.create()
     return this.#runSerial(
       project.id,
       async () => {
@@ -225,7 +223,6 @@ export class Syncer {
   }
 
   async push(project: TProjectEntry): Promise<boolean> {
-    if (!this.config.canSync()) return false;
     return this.#runSerial(
       project.id,
       async () => {
@@ -450,7 +447,6 @@ export class Syncer {
 
   async #syncAllDirty() {
     if (this.syncingAll) return;
-    if (!this.config.canSync()) return;
     this.syncingAll = true;
 
     try {

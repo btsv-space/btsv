@@ -3,7 +3,7 @@
     projects,
     ensureProjectsHydrated,
   } from "$lib/stores/projects.svelte";
-  import { syncer, canSync } from "$lib/stores/syncer.svelte";
+  import { syncer } from "$lib/stores/syncer.svelte";
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { ESyncState } from "$lib/shared/types";
   import { onMount, onDestroy } from "svelte";
@@ -17,8 +17,7 @@
 
     projectsReady = true;
 
-    // No server prefs to wait for — sync is unlocked immediately
-    canSync.value = true;
+    // Everything needed is local by now; start the background syncer.
     syncer.start();
 
     // Projects cached without their working tree (stale/partial state) are
