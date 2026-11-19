@@ -64,7 +64,7 @@ describe("secrets store", () => {
     await dbSaveGitToken(secret);
     await dbSavePost(makePost());
     await dbSaveProject(project);
-    await dbSavePrefs({ syncType: "api", proxyUrl: "", deviceName: "local" });
+    await dbSavePrefs({ name: "local" });
 
     await dbClearAll();
 

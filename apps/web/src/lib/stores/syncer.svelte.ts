@@ -5,7 +5,7 @@ import {
   getProject,
   ensureProjectsHydrated,
 } from "$lib/stores/projects.svelte";
-import { dbGetPost, dbGetPosts, dbSaveProject } from "$lib/db";
+import { dbGetPost, dbGetPosts } from "$lib/db";
 import { type ILoadPostsOpts, type IPostRecord } from "$lib/shared/types";
 import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
 import { setProjectCommitTime } from "$lib/stores/recentProject";
@@ -66,37 +66,13 @@ export async function loadPosts(
     return [];
   }
 
-  const syncTypeChanged =
-    project.syncType !== undefined && project.syncType !== prefs.value.syncType;
-
-  let shouldPull: boolean;
-
-  switch (pullOption) {
-    case "always": {
-      shouldPull = true;
-      break;
-    }
-    case "never": {
-      shouldPull = false;
-      break;
-    }
-    case "check":
-    default: {
-      shouldPull = syncTypeChanged;
-      break;
-    }
-  }
+  const shouldPull = pullOption === "always";
 
   if (shouldPull) {
     await syncer.pull(project);
     console.log(`[loadPosts] ${projectId}: page=${page} using pulled posts`);
   } else {
     console.log(`[loadPosts] ${projectId}: page=${page} using cached, no pull`);
-  }
-
-  if (syncTypeChanged) {
-    project.syncType = prefs.value.syncType;
-    await dbSaveProject(project);
   }
 
   return await dbGetPosts(projectId, { limit: pageSize, offset, listPrefs });

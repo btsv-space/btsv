@@ -5,7 +5,6 @@ import type { DebouncedSaver } from "$lib/saver";
 
 export enum ERoute {
   HOME = "/",
-  LOGIN = "/login",
   SETTINGS = "/settings",
 }
 
@@ -34,16 +33,6 @@ export interface ISyncerProjectQueueValue {
 
 // ── Interfaces ─────────────────────────────────────
 
-export interface IUser {
-  id: string;
-  username: string;
-}
-
-export interface IStoredAuth {
-  dek: string;
-  user: IUser | null;
-}
-
 export interface IProject {
   id: string;
   name: string;
@@ -57,9 +46,7 @@ export interface ISyncStatus {
 }
 
 export interface IUserPreferences {
-  syncType: TSyncType;
-  proxyUrl: string;
-  deviceName: string;
+  name: string;
 }
 
 export interface IDeviceLockRecord {
@@ -124,38 +111,6 @@ export interface ISyncAdapter {
     gitToken: string,
   ): Promise<string | null>;
   mergeToMain(projectId: string, gitToken: string): Promise<void>;
-}
-
-export interface ILoginResult {
-  user: IUser;
-  encryptedDek: string;
-  kekSalt: string;
-}
-
-export interface IMeResult {
-  id: string;
-  username: string;
-  encryptedDek: string;
-  kekSalt: string;
-}
-
-export interface IRegisterPayload {
-  username: string;
-  password: string;
-  encryptedDek: string;
-  kekSalt: string;
-}
-
-export interface IChangePasswordPayload {
-  oldPassword: string;
-  newPassword: string;
-  encryptedDek: string;
-  kekSalt: string;
-}
-
-export interface ISecretPayload {
-  ciphertext: string;
-  iv: string;
 }
 
 export interface IPostRecord extends BtsvPostFrontmatter {
@@ -235,8 +190,6 @@ export type TParsedPost = Omit<IPostRecord, "projectId" | "dirty">;
 
 export type TGitStatus = string;
 
-export type TSyncType = "git" | "api";
-
 export type TDeviceLockState = "unconfigured" | "locked" | "unlocked";
 
 // canonical value lists live in the Constants section below; types derive
@@ -266,7 +219,6 @@ export type IPostContent = Omit<IPostRecord, TMetadataKey>;
 export type TProjectEntry = IProject & {
   status: "unknown" | "ready" | "cloning" | "error";
   error: string;
-  syncType?: TSyncType;
   storedRemoteSha?: string;
 };
 

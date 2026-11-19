@@ -1,8 +1,6 @@
 import { IV_LENGTH } from "$lib/shared/constants";
 import type { TBytes } from "$lib/shared/types";
 
-/** Legacy account-password KEK iterations (deleted with the backend). */
-export const LEGACY_KEK_ITERATIONS = 100_000;
 export const KEK_PBKDF2_ITERATIONS = 600_000;
 const PBKDF2_HASH = "SHA-256";
 const KEY_LENGTH_BITS = 256;
@@ -83,60 +81,21 @@ export async function decryptBytes(
   return new Uint8Array(plaintext);
 }
 
-export function generateUserKeys(): { dek: TBytes; kekSalt: TBytes } {
-  return {
-    dek: randomBytes(32),
-    kekSalt: randomBytes(16),
-  };
-}
-
-export async function wrapDEK(
-  dek: TBytes,
-  kek: CryptoKey,
-): Promise<{ encrypted: TBytes; iv: TBytes }> {
-  const { ciphertext, iv } = await encryptBytes(dek, kek);
-  return { encrypted: ciphertext, iv };
-}
-
-export function unwrapDEK(
-  encrypted: TBytes,
-  iv: TBytes,
-  kek: CryptoKey,
-): Promise<TBytes> {
-  return decryptBytes(encrypted, iv, kek);
-}
-
 export async function encryptToken(
   token: string,
-  dek: TBytes,
+  key: TBytes,
 ): Promise<{ ciphertext: TBytes; iv: TBytes }> {
-  return encryptBytes(new TextEncoder().encode(token), await importAesKey(dek));
+  return encryptBytes(new TextEncoder().encode(token), await importAesKey(key));
 }
 
 export async function decryptToken(
   ciphertext: TBytes,
   iv: TBytes,
-  dek: TBytes,
+  key: TBytes,
 ): Promise<string> {
   return new TextDecoder().decode(
-    await decryptBytes(ciphertext, iv, await importAesKey(dek)),
+    await decryptBytes(ciphertext, iv, await importAesKey(key)),
   );
-}
-
-export function dekToBase64(dek: Uint8Array): string {
-  return bytesToBase64(dek);
-}
-
-export function dekFromBase64(s: string): TBytes {
-  return base64ToBytes(s);
-}
-
-export function bytesToApi(bytes: Uint8Array): string {
-  return bytesToBase64(bytes);
-}
-
-export function bytesFromApi(s: string): TBytes {
-  return base64ToBytes(s);
 }
 
 export function deriveKek(

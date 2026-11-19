@@ -48,7 +48,11 @@
   >
     <ProjectNav />
     <nav class="flex items-center gap-3 text-sm">
-      <button class="p-0" onclick={() => goto("/settings")}>
+      <button
+        class="p-0"
+        onclick={() => goto("/settings")}
+        aria-label="Open settings"
+      >
         <Bolt class="icon h-7 w-7" />
       </button>
     </nav>

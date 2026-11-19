@@ -9,7 +9,7 @@ import { serializeMdx, parseMdx } from "$lib/parser";
 import { contentEqual } from "$lib/saver";
 import { ensureGitToken } from "$lib/secrets";
 import { APP_NAMESPACE } from "$lib/shared/constants";
-import { commitTimestamp, now } from "$lib/shared/utils";
+import { commitTimestamp, now, slugify } from "$lib/shared/utils";
 import { createSyncAdapter } from "$lib/sync/adapter";
 import { postFileExists, deletePostFile } from "$lib/fs";
 import {
@@ -24,8 +24,8 @@ import {
   type ISyncerConfig,
 } from "$lib/shared/types";
 
-function getDeviceName(prefs: IUserPreferences): string {
-  return prefs.deviceName?.trim() || "local";
+function getNameTag(prefs: IUserPreferences): string {
+  return slugify(prefs.name ?? "") || "unnamed";
 }
 
 export class Syncer {
@@ -237,7 +237,7 @@ export class Syncer {
         }
 
         this.#setStatus(project.id, ESyncState.SYNCING_PUSH);
-        const deviceName = getDeviceName(this.config.getPrefs());
+        const nameTag = getNameTag(this.config.getPrefs());
         const adapter = await createSyncAdapter(project);
         let allOk = true;
         let anyPublished = false;
@@ -255,7 +255,7 @@ export class Syncer {
           if (!post.draft) anyPublished = true;
 
           const ts = commitTimestamp();
-          const message = `${APP_NAMESPACE}-${deviceName}-${project.id}-${post.id}-${op}-${ts}`;
+          const message = `${APP_NAMESPACE}-${nameTag}-${project.id}-${post.id}-${op}-${ts}`;
 
           try {
             if (post.deleted) {

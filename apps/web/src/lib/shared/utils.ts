@@ -32,3 +32,19 @@ export function formatPostDate(isoString: string): string {
 export function commitTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
+
+export function slugify(value: string): string {
+  return (
+    value
+      .toLowerCase()
+      .trim()
+      // drop anything that is not a letter, digit, whitespace, or hyphen
+      .replace(/[^a-z0-9\s-]/g, "")
+      // turn any run of whitespace into a single hyphen
+      .replace(/\s+/g, "-")
+      // collapse repeated hyphens
+      .replace(/-+/g, "-")
+      // trim leading/trailing hyphens
+      .replace(/^-|-$/g, "")
+  );
+}

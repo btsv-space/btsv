@@ -15,6 +15,7 @@
   import { type IPostRecord } from "$lib/shared/types";
   import {
     now,
+    slugify,
     toDatetimeLocalValue,
     fromDatetimeLocalValue,
   } from "$lib/shared/utils";
@@ -36,16 +37,6 @@
   const postId = page.params.postId!;
 
   console.log(`[/:projectId/:postId] mounted: ${projectId}/${postId}`);
-
-  function deriveSlug(title: string): string {
-    return title
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }
 
   async function deletePost(pid: string, id: string): Promise<void> {
     const project = getProject(pid);
@@ -86,7 +77,7 @@
       };
     }
 
-    const slug = deriveSlug(workingSlug);
+    const slug = slugify(workingSlug);
 
     if (slug === lastCheckedSlug) {
       saver?.schedule();
@@ -102,7 +93,7 @@
     }
 
     dbGetPostBySlug(projectId, slug).then((duplicateSlugPost) => {
-      if (slug !== deriveSlug(workingSlug)) return;
+      if (slug !== slugify(workingSlug)) return;
       if (duplicateSlugPost && duplicateSlugPost.id !== workingPost!.id) {
         slugError = "This slug is already used by another post.";
         workingPost!.slug = lastCheckedSlug!;
@@ -173,7 +164,7 @@
 
   function handleTitleBlur() {
     if (!workingSlug && workingPost!.title) {
-      workingSlug = deriveSlug(workingPost!.title);
+      workingSlug = slugify(workingPost!.title);
     }
   }
 
@@ -500,7 +491,7 @@
             type="text"
             bind:value={workingSlug}
             onblur={() => {
-              workingSlug = deriveSlug(workingSlug);
+              workingSlug = slugify(workingSlug);
             }}
             pattern="[a-z0-9]+(-[a-z0-9]+)*"
             title="Use lowercase letters, numbers, and hyphens only."

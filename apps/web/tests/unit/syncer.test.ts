@@ -3,7 +3,6 @@ import { Syncer } from "$lib/sync/syncer";
 import {
   ESyncState,
   type IPostRecord,
-  type TSyncType,
   type TProjectEntry,
 } from "$lib/shared/types";
 import type { ISyncAdapter } from "$lib/shared/types";
@@ -94,11 +93,7 @@ function makeDirtyPost(overrides: Partial<IPostRecord> = {}): IPostRecord {
 function makeConfig(getProjects?: () => TProjectEntry[]) {
   const onSyncStatus = vi.fn();
   return {
-    getPrefs: () => ({
-      syncType: "git" as TSyncType,
-      proxyUrl: "",
-      deviceName: "testuser",
-    }),
+    getPrefs: () => ({ name: "testuser" }),
     getProjects: getProjects ?? (() => []),
     canSync: () => true,
     onSyncStatus,
@@ -125,7 +120,6 @@ function makeMockProjectEntry(): TProjectEntry {
     repoUrl: "https://github.com/test/test.git",
     status: "ready" as const,
     error: "",
-    syncType: "git" as TSyncType,
   };
 }
 
@@ -485,6 +479,40 @@ describe("Syncer", () => {
         post.id,
         expect.stringContaining("serialized-"),
         expect.stringContaining("btsv-testuser-proj-1-20260608-14302250-save-"),
+        "decrypted-token",
+      );
+    });
+
+    it("slugifies the name in commit messages", async () => {
+      config.getPrefs = () => ({ name: "Work MacBook" });
+      const post = makeDirtyPost();
+      mockGetDirtyPosts.mockResolvedValue([post]);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAdapterCommitAndPush).toHaveBeenCalledWith(
+        "proj-1",
+        post.id,
+        expect.stringContaining("serialized-"),
+        expect.stringContaining("btsv-work-macbook-proj-1-"),
+        "decrypted-token",
+      );
+    });
+
+    it("falls back to 'unnamed' when the name is blank", async () => {
+      config.getPrefs = () => ({ name: "" });
+      const post = makeDirtyPost();
+      mockGetDirtyPosts.mockResolvedValue([post]);
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAdapterCommitAndPush).toHaveBeenCalledWith(
+        "proj-1",
+        post.id,
+        expect.stringContaining("serialized-"),
+        expect.stringContaining("btsv-unnamed-proj-1-"),
         "decrypted-token",
       );
     });

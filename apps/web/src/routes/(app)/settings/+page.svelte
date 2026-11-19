@@ -9,7 +9,7 @@
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
-  let deviceName = $state(prefs.value.deviceName);
+  let name = $state(prefs.value.name);
   let saveState = $state<SaveState>("idle");
   let saveMsg = $state("");
 
@@ -37,20 +37,17 @@
     }
   }
 
-  async function saveDeviceName() {
+  async function saveName() {
     showToast("saving", "Saving...");
     try {
-      const next = {
-        ...prefs.value,
-        deviceName: deviceName.trim() || "local",
-      };
+      const next = { ...prefs.value, name: name.trim() };
       prefs.value = next;
       await dbSavePrefs(next);
-      deviceName = next.deviceName;
+      name = next.name;
       showToast("success", "Saved");
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : "Failed to save");
-      console.error("[settings] failed to save device name:", err);
+      console.error("[settings] failed to save name:", err);
     }
   }
 
@@ -91,12 +88,12 @@
       <label
         class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
       >
-        <span>Device name</span>
+        <span>Name</span>
         <input
           type="text"
-          bind:value={deviceName}
-          onchange={saveDeviceName}
-          placeholder="local"
+          bind:value={name}
+          onchange={saveName}
+          placeholder="unnamed"
           class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
         />
       </label>

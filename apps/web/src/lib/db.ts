@@ -237,7 +237,7 @@ export async function dbGetProjectTags(projectId: string): Promise<string[]> {
   return [...tags].sort((a, b) => a.localeCompare(b));
 }
 
-// ── Projects cache ────────────────────────────────
+// ── Projects ──────────────────────────────────────
 
 export async function dbGetProjects(): Promise<TProjectEntry[]> {
   const db = await getDB();
@@ -262,7 +262,7 @@ export async function dbSaveProject(project: TProjectEntry): Promise<void> {
   await db.put("projects", { ...project });
 }
 
-// ── Preferences cache ─────────────────────────────
+// ── Preferences ───────────────────────────────────
 
 export async function dbGetPrefs(): Promise<IUserPreferences | undefined> {
   const db = await getDB();

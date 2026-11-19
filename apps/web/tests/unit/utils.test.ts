@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   now,
+  slugify,
   toDatetimeLocalValue,
   fromDatetimeLocalValue,
   formatPostDate,
@@ -70,5 +71,23 @@ describe("fromDatetimeLocalValue", () => {
     expect(val).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
     // round-trips back to the same local wall-clock time
     expect(toDatetimeLocalValue(val)).toBe("2026-08-19T14:30");
+  });
+});
+
+describe("slugify", () => {
+  it("lowercases and hyphenates spaces", () => {
+    expect(slugify("Work MacBook")).toBe("work-macbook");
+  });
+
+  it("strips punctuation instead of hyphenating it", () => {
+    expect(slugify("Matt's MacBook!")).toBe("matts-macbook");
+  });
+
+  it("collapses and trims separators", () => {
+    expect(slugify("  --Hello,   World--  ")).toBe("hello-world");
+  });
+
+  it("returns an empty string when nothing alphanumeric remains", () => {
+    expect(slugify("!!!")).toBe("");
   });
 });
