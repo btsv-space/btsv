@@ -26,18 +26,12 @@ LOCAL_IP := $(shell ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1
 dev-host:
 	@echo "Starting on https://$(LOCAL_IP):5173 ..."
 	@set -a; [ -f .env.development ] && . .env.development; \
-	VITE_API_URL="https://$(LOCAL_IP):8080/api"; \
-	VITE_PROXY_URL="https://$(LOCAL_IP):9999"; \
 	ALLOW_ORIGIN="https://$(LOCAL_IP):5173"; \
 	HTTPS_CERT="$(CURDIR)/.certs/dev.pem"; \
 	HTTPS_KEY="$(CURDIR)/.certs/dev-key.pem"; \
-	TLS_CERT_FILE="$(CURDIR)/.certs/dev.pem"; \
-	TLS_KEY_FILE="$(CURDIR)/.certs/dev-key.pem"; \
 	set +a; \
 	trap 'kill 0' EXIT; \
 	cd apps/web && pnpm dev --host & \
-	cd apps/api && go run ./cmd/server & \
-	cd apps/proxy && go run . -log-level debug & \
 	wait
 
 lint: lint-web lint-api lint-proxy
