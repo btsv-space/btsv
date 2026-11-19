@@ -287,3 +287,10 @@ export async function dbGetGitToken(
   const db = await getDB();
   return db.get("secrets", projectId);
 }
+
+export async function dbClearAll(): Promise<void> {
+  const db = await getDB();
+  for (const name of Array.from(db.objectStoreNames)) {
+    await db.clear(name);
+  }
+}

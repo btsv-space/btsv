@@ -84,6 +84,16 @@ describe("device key", () => {
     expect(second.deviceLock.state).toBe("unlocked");
   });
 
+  it("reset removes the record and returns to unconfigured", async () => {
+    const { deviceLock } = await importDevice();
+    await deviceLock.setup(PASSCODE);
+    deviceLock.reset();
+
+    expect(deviceLock.state).toBe("unconfigured");
+    expect(localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)).toBeNull();
+    expect(() => deviceLock.getDek()).toThrow();
+  });
+
   it("clears a corrupt record instead of bricking the app", async () => {
     localStorage.setItem(DEVICE_LOCK_STORAGE_KEY, "{not json");
     const { deviceLock } = await importDevice();

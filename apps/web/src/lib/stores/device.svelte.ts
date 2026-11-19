@@ -65,6 +65,12 @@ class DeviceLock {
     }
   }
 
+  reset(): void {
+    localStorage.removeItem(DEVICE_LOCK_STORAGE_KEY);
+    this.deviceDek = null;
+    this.isLockSetup = false;
+  }
+
   #load(): boolean {
     if (!localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)) return false;
     if (!this.#readRecord()) {

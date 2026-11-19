@@ -100,3 +100,35 @@ export async function checkProjectDirExists(
     return false;
   }
 }
+
+export async function clearFS(): Promise<void> {
+  const fs = await getFS();
+
+  async function remove(path: string): Promise<void> {
+    let stat: Awaited<ReturnType<typeof fs.promises.stat>>;
+    try {
+      stat = await fs.promises.stat(path);
+    } catch {
+      return;
+    }
+    if (stat.isDirectory()) {
+      const entries = await fs.promises.readdir(path);
+      for (const entry of entries) {
+        await remove(`${path}/${entry}`);
+      }
+      await fs.promises.rmdir(path).catch(() => {});
+    } else {
+      await fs.promises.unlink(path).catch(() => {});
+    }
+  }
+
+  let entries: string[];
+  try {
+    entries = await fs.promises.readdir("/");
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    await remove(`/${entry}`);
+  }
+}
