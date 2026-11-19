@@ -3,9 +3,8 @@
   import { page } from "$app/state";
   import { projects, getProject } from "$lib/stores/projects.svelte";
   import { syncer } from "$lib/stores/syncer.svelte";
-  import { api } from "$lib/api";
-  import { encryptToken, bytesToApi } from "$lib/crypto";
-  import { getDEK, gitTokenCache } from "$lib/stores/auth.svelte";
+  import { saveGitToken } from "$lib/secrets";
+  import { dbSaveProject } from "$lib/db";
   import type { TProjectEntry } from "$lib/shared/types";
   import { FolderPlus, Wrench, Check } from "@lucide/svelte";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
@@ -15,7 +14,7 @@
 
   console.log("[/projects] mounted");
 
-  let showCreateForm = $derived(page.url.searchParams.get("new") === "true");
+  const showCreateForm = $derived(page.url.searchParams.get("new") === "true");
   let formError = $state("");
   let formSubmitting = $state(false);
   let saved = $state(false);
@@ -31,6 +30,12 @@
     formError = "";
   }
 
+  function generateProjectId(): string {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+
   async function createProject(
     displayName: string,
     repoUrl: string,
@@ -39,20 +44,24 @@
     formError = "";
     formSubmitting = true;
 
-    let project: { id: string; name: string; repoUrl: string };
+    const project: TProjectEntry = {
+      id: generateProjectId(),
+      name: displayName,
+      repoUrl,
+      status: "cloning",
+      error: "",
+    };
+
+    projects.value = [project, ...projects.value];
+
     try {
-      project = await api.projects.create(displayName, repoUrl);
+      await saveGitToken(project.id, token);
+      await dbSaveProject(project);
     } catch (err) {
-      formError =
-        err instanceof Error ? err.message : "Failed to create project";
+      formError = err instanceof Error ? err.message : "Failed to save project";
       formSubmitting = false;
       return null;
     }
-
-    projects.value = [
-      { ...project, status: "cloning", error: "" } as TProjectEntry,
-      ...projects.value,
-    ];
 
     const projectEntry = getProject(project.id);
     if (!projectEntry) {
@@ -60,32 +69,22 @@
       return null;
     }
 
+    let failed = false;
+
     try {
       await syncer.initialPull(projectEntry, token);
       projectEntry.status = "ready";
     } catch (err) {
+      failed = true;
       projectEntry.status = "error";
       projectEntry.error = err instanceof Error ? err.message : "Clone failed";
-      formSubmitting = false;
-      return null;
+      formError = projectEntry.error;
     }
 
-    const dek = getDEK();
-    const { ciphertext, iv } = await encryptToken(token, dek);
-
-    api.projects
-      .setSecret(project.id, {
-        ciphertext: bytesToApi(ciphertext),
-        iv: bytesToApi(iv),
-      })
-      .catch((err: unknown) => {
-        console.error("[/projects] failed to store encrypted token:", err);
-      });
-
-    gitTokenCache.set(project.id, token);
+    await dbSaveProject(projectEntry);
     formSubmitting = false;
 
-    return project.id;
+    return failed ? null : project.id;
   }
 
   async function handleCreate(e: Event) {
@@ -183,79 +182,79 @@
 </Modal>
 
 {#if projects.value.length === 0}
-  <p class="text-muted-foreground">
+  <p class="text-muted-foreground m-0 mb-4">
     No projects yet. Create one to get started.
   </p>
-{:else}
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    <button
-      class="hidden md:flex card border-dashed border-2 border-muted-foreground/30 hover:border-primary/50 flex-col items-center justify-center gap-2 p-6 text-muted-foreground hover:text-primary transition-colors cursor-pointer min-h-[120px]"
-      onclick={() => goto("/projects?new=true")}
-    >
-      <FolderPlus class="icon w-6 h-6" />
-      <span class="text-sm font-medium">New Project</span>
-    </button>
-
-    {#each projects.value as project (project.id)}
-      {@const isReady = project.status === "ready"}
-      {@const isError = project.status === "error"}
-      {@const isCloning = project.status === "cloning"}
-
-      <div
-        class="card cursor-pointer hover:border-muted-foreground/50"
-        onclick={() => goto(`/${project.id}`)}
-        onkeydown={(e) => e.key === "Enter" && goto(`/${project.id}`)}
-        role="link"
-        tabindex="0"
-      >
-        <div class="min-w-0 flex-1 flex flex-col gap-3">
-          <div class="flex flex-col gap-1">
-            <h3 class="text-base font-semibold m-0">{project.name}</h3>
-            <p class="text-sm text-muted-foreground m-0 truncate">
-              {project.repoUrl}
-            </p>
-          </div>
-          <div class="flex items-end justify-between">
-            <div class="flex items-center gap-2">
-              <span
-                class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full {isReady
-                  ? 'bg-green-500/12 text-green-500'
-                  : isCloning
-                    ? 'bg-amber-500/12 text-amber-500'
-                    : isError
-                      ? 'bg-destructive/12 text-destructive'
-                      : 'bg-muted-foreground/12 text-muted-foreground'}"
-              >
-                {isReady
-                  ? "Ready"
-                  : isError
-                    ? "Error"
-                    : isCloning
-                      ? "Cloning..."
-                      : "Unknown"}
-              </span>
-              {#if isError}
-                <span class="text-xs text-destructive">{project.error}</span>
-              {/if}
-            </div>
-            <button
-              class="btn-secondary p-2 text-muted-foreground cursor-pointer rounded-full -mr-1 -mb-1"
-              onclick={(e) => {
-                e.stopPropagation();
-                editingProject = project.id;
-              }}
-              aria-label="Edit token"
-            >
-              <Wrench class="icon" />
-            </button>
-          </div>
-        </div>
-      </div>
-    {/each}
-  </div>
 {/if}
 
-<FloatingButton class="md:hidden" onclick={() => (showCreateForm = true)}>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  <button
+    class="hidden md:flex card border-dashed border-2 border-muted-foreground/30 hover:border-primary/50 flex-col items-center justify-center gap-2 p-6 text-muted-foreground hover:text-primary transition-colors cursor-pointer min-h-[120px]"
+    onclick={() => goto("/projects?new=true")}
+  >
+    <FolderPlus class="icon w-6 h-6" />
+    <span class="text-sm font-medium">New Project</span>
+  </button>
+
+  {#each projects.value as project (project.id)}
+    {@const isReady = project.status === "ready"}
+    {@const isError = project.status === "error"}
+    {@const isCloning = project.status === "cloning"}
+
+    <div
+      class="card cursor-pointer hover:border-muted-foreground/50"
+      onclick={() => goto(`/${project.id}`)}
+      onkeydown={(e) => e.key === "Enter" && goto(`/${project.id}`)}
+      role="link"
+      tabindex="0"
+    >
+      <div class="min-w-0 flex-1 flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <h3 class="text-base font-semibold m-0">{project.name}</h3>
+          <p class="text-sm text-muted-foreground m-0 truncate">
+            {project.repoUrl}
+          </p>
+        </div>
+        <div class="flex items-end justify-between">
+          <div class="flex items-center gap-2">
+            <span
+              class="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full {isReady
+                ? 'bg-green-500/12 text-green-500'
+                : isCloning
+                  ? 'bg-amber-500/12 text-amber-500'
+                  : isError
+                    ? 'bg-destructive/12 text-destructive'
+                    : 'bg-muted-foreground/12 text-muted-foreground'}"
+            >
+              {isReady
+                ? "Ready"
+                : isError
+                  ? "Error"
+                  : isCloning
+                    ? "Cloning..."
+                    : "Unknown"}
+            </span>
+            {#if isError}
+              <span class="text-xs text-destructive">{project.error}</span>
+            {/if}
+          </div>
+          <button
+            class="btn-secondary p-2 text-muted-foreground cursor-pointer rounded-full -mr-1 -mb-1"
+            onclick={(e) => {
+              e.stopPropagation();
+              editingProject = project.id;
+            }}
+            aria-label="Edit token"
+          >
+            <Wrench class="icon" />
+          </button>
+        </div>
+      </div>
+    </div>
+  {/each}
+</div>
+
+<FloatingButton class="md:hidden" onclick={() => goto("/projects?new=true")}>
   <FolderPlus class="icon" /> New Project
 </FloatingButton>
 
