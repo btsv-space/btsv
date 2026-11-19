@@ -19,56 +19,7 @@ const project: IProject = {
 };
 
 describe("createSyncAdapter", () => {
-  it("returns GitAdapter with default proxyUrl when syncType is git and prefs has no proxyUrl", async () => {
-    const { createSyncAdapter } = await import("$lib/sync/adapter");
-    mockGitAdapter.mockImplementation(function () {
-      return {
-        checkRemote: vi.fn(),
-        pull: vi.fn(),
-        initialPull: vi.fn(),
-        mergeToMain: vi.fn(),
-        commitAndPush: vi.fn(),
-        commitDeletion: vi.fn(),
-        isGit: true,
-      } as ISyncAdapter;
-    });
-
-    const adapter = await createSyncAdapter(project, {
-      syncType: "git",
-      proxyUrl: "",
-    });
-
-    expect(mockGitAdapter).toHaveBeenCalledWith(project.repoUrl, undefined);
-
-    expect(adapter).toHaveProperty("isGit", true);
-  });
-
-  it("returns GitAdapter with proxyUrl when syncType is git and prefs has proxyUrl", async () => {
-    const { createSyncAdapter } = await import("$lib/sync/adapter");
-    mockGitAdapter.mockImplementation(function () {
-      return {
-        checkRemote: vi.fn(),
-        pull: vi.fn(),
-        initialPull: vi.fn(),
-        mergeToMain: vi.fn(),
-        commitAndPush: vi.fn(),
-        commitDeletion: vi.fn(),
-        isGit: true,
-      } as ISyncAdapter;
-    });
-
-    await createSyncAdapter(project, {
-      syncType: "git",
-      proxyUrl: "http://custom-proxy:8888",
-    });
-
-    expect(mockGitAdapter).toHaveBeenCalledWith(
-      project.repoUrl,
-      "http://custom-proxy:8888",
-    );
-  });
-
-  it("returns ApiAdapter when syncType is api", async () => {
+  it("always returns an ApiAdapter (no git/proxy path)", async () => {
     const { createSyncAdapter } = await import("$lib/sync/adapter");
     mockApiAdapter.mockImplementation(function () {
       return {
@@ -82,12 +33,10 @@ describe("createSyncAdapter", () => {
       } as ISyncAdapter;
     });
 
-    const adapter = await createSyncAdapter(project, {
-      syncType: "api",
-      proxyUrl: "",
-    });
+    const adapter = await createSyncAdapter(project);
 
     expect(mockApiAdapter).toHaveBeenCalledWith(project.repoUrl);
+    expect(mockGitAdapter).not.toHaveBeenCalled();
     expect(adapter).toHaveProperty("isApi", true);
   });
 });

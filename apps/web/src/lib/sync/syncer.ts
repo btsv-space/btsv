@@ -104,13 +104,12 @@ export class Syncer {
     return this.#runSerial(
       project.id,
       async () => {
-        const userPrefs = this.config.getPrefs();
         const token = await this.#ensureGitToken(project.id);
         if (!token) {
           return [];
         }
 
-        const adapter = await createSyncAdapter(project, userPrefs);
+        const adapter = await createSyncAdapter(project);
         let lastCommitTime: number | undefined;
         let headSha: string | undefined;
 
@@ -183,12 +182,11 @@ export class Syncer {
     return this.#runSerial(
       project.id,
       async () => {
-        const userPrefs = this.config.getPrefs();
         const token = tokenOverride ?? (await this.#ensureGitToken(project.id));
         if (!token) {
           return [];
         }
-        const adapter = await createSyncAdapter(project, userPrefs);
+        const adapter = await createSyncAdapter(project);
         this.#setStatus(project.id, ESyncState.SYNCING_PULL);
         try {
           const { postEntries, lastCommitTime, headSha } =
@@ -238,9 +236,8 @@ export class Syncer {
         }
 
         this.#setStatus(project.id, ESyncState.SYNCING_PUSH);
-        const userPrefs = this.config.getPrefs();
         const username = getUsername();
-        const adapter = await createSyncAdapter(project, userPrefs);
+        const adapter = await createSyncAdapter(project);
         let allOk = true;
         let anyPublished = false;
         let lastToken: string | null = null;
