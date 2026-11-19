@@ -3,17 +3,19 @@
   import { onMount } from "svelte";
   import { dev } from "$app/environment";
   import favicon from "$lib/assets/favicon.svg";
-  import { isAuthenticated } from "$lib/stores/auth.svelte";
   import { Bolt } from "@lucide/svelte";
   import { goto, preloadCode } from "$app/navigation";
   import ProjectNav from "$lib/components/ProjectNav.svelte";
   import ReloadPrompt from "$lib/components/ReloadPrompt.svelte";
+  import DeviceGate from "$lib/components/DeviceGate.svelte";
+  import { deviceLock } from "$lib/stores/device.svelte";
 
   let { children } = $props();
   let preloaded = false;
+  const unlocked = $derived(deviceLock.state === "unlocked");
 
   $effect(() => {
-    if (isAuthenticated.value && !preloaded) {
+    if (unlocked && !preloaded) {
       preloaded = true;
       preloadCode("/");
       preloadCode("/projects");
@@ -40,21 +42,25 @@
   {/if}
 </svelte:head>
 
-<header
-  class="sticky top-0 z-10 bg-background flex items-center justify-between px-4 py-4 max-w-240 mx-auto"
->
-  <ProjectNav />
-  <nav class="flex items-center gap-3 text-sm">
-    {#if isAuthenticated.value}
+{#if unlocked}
+  <header
+    class="sticky top-0 z-10 bg-background flex items-center justify-between px-4 py-4 max-w-240 mx-auto"
+  >
+    <ProjectNav />
+    <nav class="flex items-center gap-3 text-sm">
       <button class="p-0" onclick={() => goto("/settings")}>
         <Bolt class="icon h-7 w-7" />
       </button>
-    {/if}
-  </nav>
-</header>
-
-<ReloadPrompt />
+    </nav>
+  </header>
+{/if}
 
 <main class="max-w-240 mx-auto p-4">
-  {@render children()}
+  {#if unlocked}
+    {@render children()}
+  {:else}
+    <DeviceGate />
+  {/if}
 </main>
+
+<ReloadPrompt />
