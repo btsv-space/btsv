@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Lock } from "@lucide/svelte";
+  import { Lock, TriangleAlert } from "@lucide/svelte";
   import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
   import { wipeLocalData } from "$lib/reset";
   import { deviceLock } from "$lib/stores/device.svelte";
@@ -42,92 +42,99 @@
 </script>
 
 <div class="min-h-[70vh] flex items-center justify-center">
-  <form class="card w-full max-w-sm flex flex-col gap-4" onsubmit={submit}>
-    <div class="flex items-center gap-2">
-      <Lock class="icon" />
-      <h1 class="text-lg font-semibold m-0">
-        {isSetup ? "Protect this device" : "Unlock"}
-      </h1>
-    </div>
+  {#if confirmingReset}
+    <div class="card w-full max-w-sm flex flex-col gap-4">
+      <div class="flex items-center gap-2">
+        <TriangleAlert class="icon text-destructive" />
+        <h1 class="text-lg font-semibold m-0 text-destructive">
+          Reset device?
+        </h1>
+      </div>
 
-    {#if isSetup}
-      <p class="text-sm text-muted-foreground m-0">
-        Posts live on this device and sync straight to GitHub. Set a passcode so
-        your GitHub tokens are encrypted at rest.
-      </p>
-      <p class="text-sm text-muted-foreground m-0">
-        There is no recovery: if you forget it, you reset the device and
-        re-enter your tokens. Posts are unaffected.
-      </p>
-    {:else}
-      <p class="text-sm text-muted-foreground m-0">
-        Enter your passcode to continue.
-      </p>
-    {/if}
-
-    {#if error}
       <p
-        class="bg-destructive/10 text-destructive text-sm rounded-md px-3 py-2"
+        class="text-sm text-foreground bg-destructive/10 border border-destructive/40 rounded-md p-3 leading-relaxed m-0"
       >
-        {error}
+        All local data will be wiped. Posts already synced to GitHub can be
+        re-cloned but unpushed changes will be lost.
       </p>
-    {/if}
 
-    <label
-      class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
-    >
-      <span>Passcode</span>
-      <input
-        type="password"
-        autocomplete={isSetup ? "new-password" : "current-password"}
-        bind:value={passcode}
-        required
-        minlength={PASSCODE_MIN_LENGTH}
-        disabled={busy || confirmingReset}
-        class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
-      />
-    </label>
+      <div class="flex justify-between gap-2">
+        <button class="btn-destructive" type="button" onclick={handleReset}>
+          Reset device
+        </button>
+        <button
+          class="btn-secondary"
+          type="button"
+          onclick={() => (confirmingReset = false)}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  {:else}
+    <form class="card w-full max-w-sm flex flex-col gap-4" onsubmit={submit}>
+      <div class="flex items-center gap-2">
+        <Lock class="icon" />
+        <h1 class="text-lg font-semibold m-0">
+          {isSetup ? "Protect this device" : "Unlock"}
+        </h1>
+      </div>
 
-    {#if isSetup}
+      {#if isSetup}
+        <p class="text-sm text-muted-foreground m-0">
+          Posts live on this device and sync to GitHub. Set a passcode to
+          encrypt your GitHub tokens at rest.
+        </p>
+        <p class="text-sm text-muted-foreground m-0">
+          Note: there is no recovery! If you forget it, you reset the device and
+          re-enter your tokens. Any unsynced changes will be lost.
+        </p>
+      {:else}
+        <p class="text-sm text-muted-foreground m-0">
+          Enter your passcode to continue.
+        </p>
+      {/if}
+
+      {#if error}
+        <p
+          class="bg-destructive/10 text-destructive text-sm rounded-md px-3 py-2"
+        >
+          {error}
+        </p>
+      {/if}
+
       <label
         class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
       >
-        <span>Confirm passcode</span>
+        <span>Passcode</span>
         <input
           type="password"
-          autocomplete="new-password"
-          bind:value={confirmPasscode}
+          autocomplete={isSetup ? "new-password" : "current-password"}
+          bind:value={passcode}
           required
           minlength={PASSCODE_MIN_LENGTH}
-          disabled={busy || confirmingReset}
+          disabled={busy}
           class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
         />
       </label>
-    {/if}
 
-    {#if confirmingReset}
-      <div
-        class="text-sm text-foreground bg-muted/40 border border-border rounded-md p-3 leading-relaxed"
-      >
-        <p class="m-0 mb-3">
-          Reset the device? All local data is wiped — projects, posts, tokens,
-          and the passcode. Posts already pushed to GitHub can be re-cloned;
-          unpushed changes are lost.
-        </p>
-        <div class="flex gap-2">
-          <button class="btn-secondary" type="button" onclick={handleReset}>
-            Reset device
-          </button>
-          <button
-            class="btn-secondary"
-            type="button"
-            onclick={() => (confirmingReset = false)}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    {:else}
+      {#if isSetup}
+        <label
+          class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
+        >
+          <span>Confirm passcode</span>
+          <input
+            type="password"
+            autocomplete="new-password"
+            bind:value={confirmPasscode}
+            required
+            minlength={PASSCODE_MIN_LENGTH}
+            disabled={busy}
+            class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
+          />
+        </label>
+      {/if}
+
       <div class="flex items-center justify-between gap-2 mt-2">
         {#if !isSetup}
           <button
@@ -148,6 +155,6 @@
           {/if}
         </button>
       </div>
-    {/if}
-  </form>
+    </form>
+  {/if}
 </div>
