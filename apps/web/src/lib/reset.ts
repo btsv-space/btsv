@@ -4,6 +4,7 @@ import { deviceLock } from "$lib/stores/device.svelte";
 import {
   LEGACY_AUTH_STORAGE_KEY,
   POSTS_LIST_PREFS_STORAGE_KEY,
+  PREFS_STORAGE_KEY,
   PROJECT_COMMITS_STORAGE_KEY,
   SYNC_STATUS_STORAGE_KEY,
 } from "$lib/shared/constants";
@@ -13,6 +14,7 @@ export async function wipeLocalData(): Promise<void> {
 
   for (const key of [
     LEGACY_AUTH_STORAGE_KEY,
+    PREFS_STORAGE_KEY,
     SYNC_STATUS_STORAGE_KEY,
     PROJECT_COMMITS_STORAGE_KEY,
     POSTS_LIST_PREFS_STORAGE_KEY,

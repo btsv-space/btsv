@@ -14,7 +14,6 @@ vi.mock("$lib/db", () => ({
   dbGetProjects: mockDbGetProjects,
   dbGetPost: vi.fn(),
   dbSaveProject: vi.fn(),
-  dbGetPrefs: vi.fn().mockResolvedValue(undefined),
   dbGetDirtyPosts: vi.fn().mockResolvedValue([]),
 }));
 

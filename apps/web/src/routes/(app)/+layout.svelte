@@ -3,7 +3,6 @@
     projects,
     ensureProjectsHydrated,
   } from "$lib/stores/projects.svelte";
-  import { ensurePrefsReady } from "$lib/stores/prefs.svelte";
   import { syncer, canSync } from "$lib/stores/syncer.svelte";
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { ESyncState } from "$lib/shared/types";
@@ -13,8 +12,8 @@
   let projectsReady = $state(false);
 
   async function load() {
-    // Everything needed to start is local: projects + prefs live in IDB.
-    await Promise.all([ensureProjectsHydrated(), ensurePrefsReady()]);
+    // Everything needed to start is local; projects live in IDB.
+    await ensureProjectsHydrated();
 
     projectsReady = true;
 

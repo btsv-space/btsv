@@ -1,6 +1,7 @@
 export const APP_NAMESPACE = "btsv";
 export const LEGACY_AUTH_STORAGE_KEY = `${APP_NAMESPACE}:auth`;
 export const DEVICE_LOCK_STORAGE_KEY = `${APP_NAMESPACE}:deviceLock`;
+export const PREFS_STORAGE_KEY = `${APP_NAMESPACE}:prefs`;
 export const SYNC_STATUS_STORAGE_KEY = `${APP_NAMESPACE}:syncStatus`;
 export const PROJECT_COMMITS_STORAGE_KEY = `${APP_NAMESPACE}:projectCommits`;
 export const POSTS_LIST_PREFS_STORAGE_KEY = `${APP_NAMESPACE}:postsListPrefs`;

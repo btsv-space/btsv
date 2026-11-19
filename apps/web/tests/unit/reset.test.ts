@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   LEGACY_AUTH_STORAGE_KEY,
   POSTS_LIST_PREFS_STORAGE_KEY,
+  PREFS_STORAGE_KEY,
   PROJECT_COMMITS_STORAGE_KEY,
   SYNC_STATUS_STORAGE_KEY,
 } from "$lib/shared/constants";
@@ -21,6 +22,7 @@ vi.mock("$lib/stores/device.svelte", () => ({
 
 const WIPED_KEYS = [
   LEGACY_AUTH_STORAGE_KEY,
+  PREFS_STORAGE_KEY,
   SYNC_STATUS_STORAGE_KEY,
   PROJECT_COMMITS_STORAGE_KEY,
   POSTS_LIST_PREFS_STORAGE_KEY,

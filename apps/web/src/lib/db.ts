@@ -3,7 +3,6 @@ import type {
   IPostRecord,
   IPostsListPrefs,
   ISecretRecord,
-  IUserPreferences,
   TPostSortField,
   TProjectEntry,
 } from "$lib/shared/types";
@@ -260,18 +259,6 @@ export async function dbSaveProjects(
 export async function dbSaveProject(project: TProjectEntry): Promise<void> {
   const db = await getDB();
   await db.put("projects", { ...project });
-}
-
-// ── Preferences ───────────────────────────────────
-
-export async function dbGetPrefs(): Promise<IUserPreferences | undefined> {
-  const db = await getDB();
-  return db.get("preferences", "default");
-}
-
-export async function dbSavePrefs(userPrefs: IUserPreferences): Promise<void> {
-  const db = await getDB();
-  await db.put("preferences", { ...userPrefs, id: "default" });
 }
 
 // ── Secrets (encrypted per-project tokens) ────────

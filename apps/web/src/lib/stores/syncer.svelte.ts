@@ -1,5 +1,5 @@
 import { Syncer } from "$lib/sync/syncer";
-import { prefs, ensurePrefsReady } from "$lib/stores/prefs.svelte";
+import { prefs } from "$lib/stores/prefs.svelte";
 import {
   projects,
   getProject,
@@ -15,7 +15,7 @@ import { getCurrentSaver } from "$lib/stores/currentSaver";
 export const canSync = { value: false };
 
 export const syncer = new Syncer({
-  getPrefs: () => prefs.value,
+  getPrefs: () => prefs,
   getProjects: () => projects.value,
   canSync: () => canSync.value,
   isPostEditing: (projectId, postId) => {
@@ -42,11 +42,11 @@ const defaultLoadPostsOpts = {
   pageSize: POSTS_PAGE_SIZE,
 } satisfies ILoadPostsOpts;
 
-// Both post-loading paths need the prefs + projects stores hydrated before
-// reading them (a full page reload would otherwise race ahead of the IDB
-// hydration and return empty results).
+// The post-loading paths need the projects store hydrated before reading it
+// (a full page reload would otherwise race ahead of the IDB hydration and
+// return empty results).
 async function ensureStoresReady(): Promise<void> {
-  await Promise.all([ensurePrefsReady(), ensureProjectsHydrated()]);
+  await ensureProjectsHydrated();
 }
 
 export async function loadPosts(

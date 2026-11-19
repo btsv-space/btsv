@@ -18,13 +18,13 @@ import {
   type IPostEntry,
   type IPostRecord,
   type ISyncerProjectQueueValue,
-  type IUserPreferences,
+  type IPreferences,
   type TProjectEntry,
   type TSyncHook,
   type ISyncerConfig,
 } from "$lib/shared/types";
 
-function getNameTag(prefs: IUserPreferences): string {
+function getNameTag(prefs: IPreferences): string {
   return slugify(prefs.name ?? "") || "unnamed";
 }
 

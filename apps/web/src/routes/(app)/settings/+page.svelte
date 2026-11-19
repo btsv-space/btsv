@@ -2,14 +2,13 @@
   import { fly } from "svelte/transition";
   import { prefs } from "$lib/stores/prefs.svelte";
   import { deviceLock } from "$lib/stores/device.svelte";
-  import { dbSavePrefs } from "$lib/db";
   import { wipeLocalData } from "$lib/reset";
   import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
   import { SECURITY_COPY } from "$lib/shared/copy";
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
-  let name = $state(prefs.value.name);
+  let name = $state(prefs.name);
   let saveState = $state<SaveState>("idle");
   let saveMsg = $state("");
 
@@ -37,18 +36,11 @@
     }
   }
 
-  async function saveName() {
+  function saveName() {
     showToast("saving", "Saving...");
-    try {
-      const next = { ...prefs.value, name: name.trim() };
-      prefs.value = next;
-      await dbSavePrefs(next);
-      name = next.name;
-      showToast("success", "Saved");
-    } catch (err) {
-      showToast("error", err instanceof Error ? err.message : "Failed to save");
-      console.error("[settings] failed to save name:", err);
-    }
+    prefs.save({ name: name.trim() });
+    name = prefs.name;
+    showToast("success", "Saved");
   }
 
   async function handleChangePasscode(e: Event) {

@@ -4,11 +4,9 @@ import {
   dbClearAll,
   dbGetGitToken,
   dbGetPosts,
-  dbGetPrefs,
   dbGetProjects,
   dbSaveGitToken,
   dbSavePost,
-  dbSavePrefs,
   dbSaveProject,
 } from "$lib/db";
 import type {
@@ -64,13 +62,11 @@ describe("secrets store", () => {
     await dbSaveGitToken(secret);
     await dbSavePost(makePost());
     await dbSaveProject(project);
-    await dbSavePrefs({ name: "local" });
 
     await dbClearAll();
 
     expect(await dbGetGitToken("proj-1")).toBeUndefined();
     expect(await dbGetPosts("proj-1", { limit: 10 })).toEqual([]);
     expect(await dbGetProjects()).toEqual([]);
-    expect(await dbGetPrefs()).toBeUndefined();
   });
 });

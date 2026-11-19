@@ -45,7 +45,7 @@ export interface ISyncStatus {
   dirty: boolean;
 }
 
-export interface IUserPreferences {
+export interface IPreferences {
   name: string;
 }
 
@@ -157,7 +157,7 @@ export interface ICurrentSaver {
 }
 
 export interface ISyncerConfig {
-  getPrefs: () => IUserPreferences;
+  getPrefs: () => IPreferences;
   getProjects: () => TProjectEntry[];
   canSync: () => boolean;
   isPostEditing?(projectId: string, postId: string): boolean;
