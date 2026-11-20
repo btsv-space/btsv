@@ -8,7 +8,8 @@
 
 import { test, expect } from "@playwright/test";
 import {
-  register,
+  setupDevice,
+  open,
   createProject,
   newPost,
   back,
@@ -20,7 +21,7 @@ test.describe("content preservation", () => {
   test("CP-1: basic round-trip: type → save → back → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -32,7 +33,7 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -40,7 +41,7 @@ test.describe("content preservation", () => {
   test("CP-2: onDestroy flush: type → back (no save button) → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -51,7 +52,7 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -59,7 +60,7 @@ test.describe("content preservation", () => {
   test("CP-3: two rounds: edit → save → back → re-enter → edit → save → back → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -71,7 +72,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1);
 
@@ -80,7 +81,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text2);
   });
@@ -88,14 +89,14 @@ test.describe("content preservation", () => {
   test("CP-4: rapid re-entry: enter → back × 3 → type → save → back → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
     const postUrl = page.url();
 
     for (let i = 0; i < 2; i++) {
       await back(page);
-      await page.goto(postUrl);
+      await open(page, postUrl);
       await expect(page.getByRole("textbox", { name: "Content" })).toBeVisible({
         timeout: 15_000,
       });
@@ -108,7 +109,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -116,7 +117,7 @@ test.describe("content preservation", () => {
   test("CP-5: mount race: type immediately on mount — not clobbered by pull", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -129,7 +130,7 @@ test.describe("content preservation", () => {
     await save(page);
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -137,7 +138,7 @@ test.describe("content preservation", () => {
   test("CP-6: flush-then-save: type → back → re-enter → type more → save", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -148,7 +149,7 @@ test.describe("content preservation", () => {
     const postUrl = page.url();
     await back(page);
 
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1);
 
@@ -158,7 +159,7 @@ test.describe("content preservation", () => {
     await save(page);
     await back(page);
 
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
   });
@@ -166,7 +167,7 @@ test.describe("content preservation", () => {
   test("CP-7: immediate back before debounce: type → back instantly → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -176,7 +177,7 @@ test.describe("content preservation", () => {
     const postUrl = page.url();
     await back(page);
 
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -184,7 +185,7 @@ test.describe("content preservation", () => {
   test("CP-8: save button spam: click save 5 times rapidly", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -201,7 +202,7 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -209,7 +210,7 @@ test.describe("content preservation", () => {
   test("CP-9: content replacement: select-all → delete → type new content", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -226,7 +227,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(textB);
     expect(await getBody(page)).not.toBe(textA);
@@ -235,7 +236,7 @@ test.describe("content preservation", () => {
   test("CP-10: special characters: markdown, code blocks, unicode, emojis", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -259,7 +260,7 @@ test.describe("content preservation", () => {
     await save(page);
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -267,7 +268,7 @@ test.describe("content preservation", () => {
   test("CP-11: empty body: clear all text → save → back → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -282,7 +283,7 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe("");
   });
@@ -290,7 +291,7 @@ test.describe("content preservation", () => {
   test("CP-12: very long content (5KB+) → save → back → re-enter", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -304,13 +305,13 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(longText);
   });
 
   test("CP-13: rapid type-save cycles: type → save × 5", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -327,7 +328,7 @@ test.describe("content preservation", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(accumulated);
   });
@@ -335,7 +336,7 @@ test.describe("content preservation", () => {
   test("CP-14: full revert chain: type → push → back → re-enter → stale IDB → push stale", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -347,7 +348,7 @@ test.describe("content preservation", () => {
     await save(page);
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(textA);
 
@@ -356,7 +357,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(textB);
 
@@ -365,7 +366,7 @@ test.describe("content preservation", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(textC);
   });
@@ -373,7 +374,7 @@ test.describe("content preservation", () => {
   test("CP-15: mount race with IDB tracing — verifies IDB state at each step", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -414,7 +415,7 @@ test.describe("content preservation", () => {
     await save(page);
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1);
   });

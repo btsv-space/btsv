@@ -7,7 +7,8 @@
 
 import { test, expect } from "@playwright/test";
 import {
-  register,
+  setupDevice,
+  open,
   createProject,
   newPost,
   back,
@@ -21,7 +22,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -36,14 +37,14 @@ test.describe("network resilience", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
 
     github.normal();
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -52,7 +53,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -65,7 +66,7 @@ test.describe("network resilience", () => {
     await back(page);
 
     github.block();
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
 
@@ -80,7 +81,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -95,14 +96,14 @@ test.describe("network resilience", () => {
 
     const postUrl = page.url();
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
 
     github.normal();
     await page.waitForTimeout(6000);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text);
   });
@@ -111,7 +112,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -124,7 +125,7 @@ test.describe("network resilience", () => {
     await back(page);
 
     github.slow(5000);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     const text2 = " Typed during slow pull — should not be clobbered.";
     await textarea.fill(text1 + text2);
     await page.waitForTimeout(8000);
@@ -133,7 +134,7 @@ test.describe("network resilience", () => {
     github.normal();
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
   });
@@ -142,7 +143,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -163,7 +164,7 @@ test.describe("network resilience", () => {
     await page.waitForTimeout(3000);
 
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
 
@@ -173,7 +174,7 @@ test.describe("network resilience", () => {
     await page.waitForTimeout(300);
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2 + text3);
   });
@@ -182,7 +183,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -195,7 +196,7 @@ test.describe("network resilience", () => {
     await back(page);
 
     github.block();
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1);
 
@@ -203,14 +204,14 @@ test.describe("network resilience", () => {
     await textarea.fill(text1 + text2);
     await page.waitForTimeout(300);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
 
     github.normal();
     await save(page);
     await back(page);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
   });
@@ -219,7 +220,7 @@ test.describe("network resilience", () => {
     page,
   }) => {
     const github = setupGithubControl(page);
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -241,7 +242,7 @@ test.describe("network resilience", () => {
     await back(page);
     github.normal();
     await page.waitForTimeout(12000);
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
     expect(await getBody(page)).toBe(text1 + text2);
   });

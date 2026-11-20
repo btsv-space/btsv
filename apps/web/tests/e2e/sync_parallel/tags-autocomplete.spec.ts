@@ -12,13 +12,13 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { register, createProject, newPost, back } from "../helpers";
+import { setupDevice, createProject, newPost, back } from "../helpers";
 
 test.describe("tags autocomplete", () => {
   test("TA-1: suggest → filter → accept → exclude → create", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
 
     // Post 1: seed two tags into the project (debounced saver → IDB).

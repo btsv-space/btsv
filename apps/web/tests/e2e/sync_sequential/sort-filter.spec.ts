@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { register, createProject } from "../helpers";
+import { setupDevice, reload, createProject } from "../helpers";
 
 /**
  * Sort & filter UI for the posts list, tested against the designed baseline
@@ -55,7 +55,7 @@ function sortDirection(page: Page) {
 
 test.describe("posts list sort & filter", () => {
   test("SF-1: sort field + direction", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await openOptions(page);
 
@@ -76,7 +76,7 @@ test.describe("posts list sort & filter", () => {
   });
 
   test("SF-2: filters, empty state, and clear filters", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await openOptions(page);
 
@@ -103,14 +103,14 @@ test.describe("posts list sort & filter", () => {
   });
 
   test("SF-3: list prefs persist across reload", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await openOptions(page);
 
     await page.getByLabel("Filter by status").selectOption("drafts");
     await expectCardOrder(page, ["Zeta", "Beta"]);
 
-    await page.reload();
+    await reload(page);
     // reload re-validates the project (unknown → cloning → ready, involving
     // a real pull); the toolbar only renders in the ready branch
     const trigger = page.getByRole("button", { name: "View options" });
@@ -125,7 +125,7 @@ test.describe("posts list sort & filter", () => {
   });
 
   test("SF-4: published-sort semantics for drafts", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await openOptions(page);
 
@@ -143,7 +143,7 @@ test.describe("posts list sort & filter", () => {
   });
 
   test("SF-5: Use default resets non-default prefs", async ({ page }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await openOptions(page);
 

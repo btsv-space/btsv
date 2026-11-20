@@ -8,7 +8,8 @@
 
 import { test, expect } from "@playwright/test";
 import {
-  register,
+  setupDevice,
+  open,
   createProject,
   newPost,
   back,
@@ -31,7 +32,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -53,7 +54,7 @@ test.describe("deletion flow", () => {
   test("DL-2: deletion without save: create → type → delete (no save)", async ({
     page,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -68,7 +69,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -104,7 +105,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -140,7 +141,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 
@@ -164,7 +165,7 @@ test.describe("deletion flow", () => {
 
     // Re-enter while the deletion is pending. The editor must NOT open the
     // pending-deletion post; it must redirect back to the project root.
-    await page.goto(postUrl);
+    await open(page, postUrl);
     await page.waitForURL(
       (url) => url.pathname.split("/").filter(Boolean).length === 1,
       { timeout: 15_000 },
@@ -182,7 +183,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
 
     await newPost(page);
@@ -210,7 +211,7 @@ test.describe("deletion flow", () => {
     // Sibling post must still be present remotely (isolation).
     expect(await fileExistsOnRemote(request, post1Id, "staging")).toBe(true);
 
-    await page.goto(post1Url);
+    await open(page, post1Url);
     await expect(page.getByRole("textbox", { name: "Content" })).toBeVisible({
       timeout: 15_000,
     });
@@ -223,7 +224,7 @@ test.describe("deletion flow", () => {
     page,
     request,
   }) => {
-    await register(page);
+    await setupDevice(page);
     await createProject(page);
     await newPost(page);
 

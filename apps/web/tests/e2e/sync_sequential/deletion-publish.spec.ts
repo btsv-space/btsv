@@ -11,7 +11,7 @@
 
 import { test } from "@playwright/test";
 import {
-  register,
+  setupDevice,
   createProject,
   newPost,
   deletePost,
@@ -31,7 +31,7 @@ test("DP-1: delete published post: verify gone from staging and main", async ({
   page,
   request,
 }) => {
-  await register(page);
+  await setupDevice(page);
   await createProject(page);
   await newPost(page);
 

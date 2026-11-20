@@ -12,8 +12,7 @@
 
 import { test, expect } from "@playwright/test";
 import {
-  register,
-  login,
+  setupDevice,
   createProject,
   newPost,
   back,
@@ -33,11 +32,11 @@ test.describe("cross-device sync", () => {
     const titleAEdited = `CD-A-edited-${suffix}`;
     const titleB = `CD-B-${suffix}`;
 
-    // Device A: register, clone, create a post, push it.
+    // Device A: set a passcode, clone the repo, push a post.
     const ctxA = await browser.newContext();
     const pageA = await ctxA.newPage();
-    const username = await register(pageA);
-    const projectId = await createProject(pageA);
+    await setupDevice(pageA);
+    await createProject(pageA);
     await newPost(pageA);
     await pageA.getByLabel("Title").fill(titleA);
     await pageA.waitForTimeout(300);
@@ -45,12 +44,12 @@ test.describe("cross-device sync", () => {
     await back(pageA);
     await waitForRemoteContent(request, postAId, titleA);
 
-    // Device B: same account in a fresh context → full clone; sees A's post.
+    // Device B: its own passcode and its own clone of the same repo.
     const ctxB = await browser.newContext();
     const pageB = await ctxB.newPage();
     const controlB = setupGithubControl(pageB);
-    await login(pageB, username);
-    await pageB.goto(`http://localhost:5173/${projectId}`);
+    await setupDevice(pageB);
+    await createProject(pageB);
     await expect(pageB.getByText(titleA)).toBeVisible({ timeout: 60_000 });
 
     // B goes "offline" and drafts its own post (dirty in IDB, unpushed).

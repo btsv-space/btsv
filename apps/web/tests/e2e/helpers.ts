@@ -4,29 +4,48 @@ export const TEST_REPO_URL = process.env.TEST_REPO_URL!;
 export const TEST_GIT_TOKEN = process.env.TEST_GIT_TOKEN!;
 export const TEST_BASELINE_SHA = process.env.TEST_BASELINE_SHA!;
 
-export async function register(page: Page) {
-  await page.goto("http://localhost:5173/login");
-  const registerButton = page.getByRole("button", { name: "Register" });
-  try {
-    await registerButton.waitFor({ state: "visible", timeout: 10_000 });
-  } catch {
-    await page.reload();
-  }
-  await registerButton.click();
-  const u = `e2e_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-  await page.getByLabel("Username").fill(u);
-  await page.getByLabel("Password").fill("testpassword123");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("**/projects", { timeout: 10_000 });
-  return u;
+export const TEST_PASSCODE = "testpasscode123";
+
+/** First run on a fresh context: set the device passcode. */
+export async function setupDevice(page: Page) {
+  await page.goto("http://localhost:5173/projects");
+
+  const setPasscode = page.getByRole("button", { name: "Set passcode" });
+  await setPasscode.waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByLabel("Passcode", { exact: true }).fill(TEST_PASSCODE);
+  await page.getByLabel("Confirm passcode").fill(TEST_PASSCODE);
+  await setPasscode.click();
+
+  // the header only renders once the device is unlocked — a positive signal,
+  // unlike waiting for the gate to disappear (which can pass before the app
+  // has even mounted)
+  await page
+    .getByRole("button", { name: "Open settings" })
+    .waitFor({ state: "visible", timeout: 20_000 });
 }
 
-export async function login(page: Page, username: string) {
-  await page.goto("http://localhost:5173/login");
-  await page.getByLabel("Username").fill(username);
-  await page.getByLabel("Password").fill("testpassword123");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL("**/projects", { timeout: 10_000 });
+/**
+ * The device DEK only lives in memory, so any full page load lands on the
+ * unlock gate. Every navigation/reload below has to go through this.
+ */
+export async function unlock(page: Page) {
+  const button = page.getByRole("button", { name: "Unlock" });
+  await button.waitFor({ state: "visible", timeout: 20_000 });
+  await page.getByLabel("Passcode", { exact: true }).fill(TEST_PASSCODE);
+  await button.click();
+  await page
+    .getByRole("button", { name: "Open settings" })
+    .waitFor({ state: "visible", timeout: 20_000 });
+}
+
+export async function open(page: Page, url: string) {
+  await page.goto(url);
+  await unlock(page);
+}
+
+export async function reload(page: Page) {
+  await page.reload();
+  await unlock(page);
 }
 
 export async function createProject(page: Page): Promise<string> {

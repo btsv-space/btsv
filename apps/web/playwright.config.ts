@@ -25,12 +25,9 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: "VITE_API_URL=http://localhost:8090/api vite dev --port 5173",
+    command: "vite dev --port 5173",
     port: 5173,
     reuseExistingServer: true,
     timeout: 30_000,
-    env: {
-      VITE_API_URL: "http://localhost:8090/api",
-    },
   },
 });
