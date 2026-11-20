@@ -54,6 +54,7 @@
     "gray-matter": "^4.0.3",
     "idb": "^8.0.3",
     "isomorphic-git": "^1.38.4",
+    "jsqr": "^1.4.0",
     "qrcode-generator": "^2.0.4"
   }
 }

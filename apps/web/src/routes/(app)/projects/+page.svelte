@@ -20,13 +20,12 @@
   show={showCreateForm}
   onclose={() => goto("/projects", { replaceState: true })}
 >
-  <div class="flex flex-col gap-4">
-    <h2 class="text-lg font-semibold m-0">New Project</h2>
-    <NewProjectForm
-      oncreated={(id) => goto(`/${id}`)}
-      oncancel={() => goto("/projects", { replaceState: true })}
-    />
-  </div>
+  <NewProjectForm
+    title="New Project"
+    allowScan
+    oncreated={(id) => goto(`/${id}`)}
+    oncancel={() => goto("/projects", { replaceState: true })}
+  />
 </Modal>
 
 {#if projects.value.length === 0}
