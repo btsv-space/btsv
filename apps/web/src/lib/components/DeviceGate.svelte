@@ -36,6 +36,18 @@
     }
   }
 
+  async function unlockWithPasskey() {
+    error = "";
+    busy = true;
+    try {
+      if (!(await deviceLock.unlockWithPasskey())) {
+        error = "Passkey unlock failed — enter your passcode";
+      }
+    } finally {
+      busy = false;
+    }
+  }
+
   async function handleReset() {
     confirmingReset = false;
     await wipeLocalData();
@@ -86,6 +98,18 @@
         </p>
         <p class="text-sm text-muted-foreground m-0">
           {SECURITY_COPY.noRecovery}
+        </p>
+      {:else if deviceLock.hasPasskey}
+        <button
+          class="btn-primary w-full"
+          type="button"
+          onclick={unlockWithPasskey}
+          disabled={busy}
+        >
+          {busy ? "Waiting…" : "Unlock with passkey"}
+        </button>
+        <p class="text-xs text-muted-foreground m-0 text-center">
+          or enter your passcode
         </p>
       {:else}
         <p class="text-sm text-muted-foreground m-0">

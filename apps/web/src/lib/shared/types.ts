@@ -49,13 +49,27 @@ export interface IPreferences {
   name: string;
 }
 
-export interface IDeviceLockRecord {
-  v: 1;
+export interface IPasscodeWrap {
   type: "passcode";
   kekSalt: string;
   iterations: number;
   wrapIv: string;
   wrappedDek: string;
+}
+
+export interface IPasskeyWrap {
+  type: "passkey";
+  credentialId: string;
+  prfSalt: string;
+  rpId: string;
+  wrapIv: string;
+  wrappedDek: string;
+}
+
+export interface IDeviceLockRecord {
+  v: 2;
+  passcode?: IPasscodeWrap;
+  passkey?: IPasskeyWrap;
 }
 
 export interface ISecretRecord {

@@ -29,7 +29,7 @@ export async function setupDevice(page: Page) {
  * unlock gate. Every navigation/reload below has to go through this.
  */
 export async function unlock(page: Page) {
-  const button = page.getByRole("button", { name: "Unlock" });
+  const button = page.getByRole("button", { name: "Unlock", exact: true });
   await button.waitFor({ state: "visible", timeout: 20_000 });
   await page.getByLabel("Passcode", { exact: true }).fill(TEST_PASSCODE);
   await button.click();

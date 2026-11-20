@@ -7,6 +7,7 @@
   import { wipeLocalData } from "$lib/reset";
   import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
   import { SECURITY_COPY } from "$lib/shared/copy";
+  import { passkeysSupported } from "$lib/passkey";
 
   type SaveState = "idle" | "saving" | "success" | "error";
 
@@ -22,6 +23,7 @@
   let confirmPasscode = $state("");
   let passcodeError = $state("");
   let passcodeBusy = $state(false);
+  let passkeyBusy = $state(false);
 
   let confirmingReset = $state(false);
 
@@ -46,6 +48,27 @@
     prefs.save({ name: name.trim() });
     name = prefs.name;
     showToast("success", "Saved");
+  }
+
+  async function addPasskey() {
+    showToast("saving", "Waiting for passkey...");
+    passkeyBusy = true;
+    try {
+      await deviceLock.addPasskey();
+      showToast("success", "Passkey added");
+    } catch (err) {
+      showToast(
+        "error",
+        err instanceof Error ? err.message : "Could not add a passkey",
+      );
+    } finally {
+      passkeyBusy = false;
+    }
+  }
+
+  function removePasskey() {
+    deviceLock.removePasskey();
+    showToast("success", "Passkey removed");
   }
 
   function cancelChangePasscode() {
@@ -112,12 +135,7 @@
     </section>
 
     <section class="card flex flex-col gap-4">
-      <div class="flex flex-col gap-1">
-        <h2 class="text-[15px] font-semibold m-0">Security</h2>
-        <p class="text-sm text-muted-foreground font-normal m-0">
-          {SECURITY_COPY.passcodePurpose}
-        </p>
-      </div>
+      <h2 class="text-[15px] font-semibold m-0">Security</h2>
 
       {#if changingPasscode}
         <div
@@ -189,22 +207,61 @@
           </form>
         </div>
       {:else}
-        <div class="flex gap-2">
-          <button
-            class="btn-outline"
-            type="button"
-            onclick={() => (changingPasscode = true)}
-          >
-            Change passcode
-          </button>
-          <button
-            class="btn-outline"
-            type="button"
-            onclick={() => deviceLock.lock()}
-          >
-            <Lock class="h-4 w-4 stroke-[1.5]" />
-            Lock now
-          </button>
+        <div class="flex flex-col divide-y divide-border">
+          <div class="flex items-center justify-between gap-4 py-3 first:pt-0">
+            <p class="text-sm text-muted-foreground m-0">
+              {SECURITY_COPY.passcodePurpose}
+            </p>
+            <button
+              class="btn-outline shrink-0"
+              type="button"
+              onclick={() => (changingPasscode = true)}
+            >
+              Change passcode
+            </button>
+          </div>
+
+          <div class="flex items-center justify-between gap-4 py-3">
+            <p class="text-sm text-muted-foreground m-0">
+              Clears the device key from memory until you unlock again.
+            </p>
+            <button
+              class="btn-outline shrink-0"
+              type="button"
+              onclick={() => deviceLock.lock()}
+            >
+              <Lock class="h-4 w-4 stroke-[1.5]" />
+              Lock now
+            </button>
+          </div>
+
+          {#if deviceLock.hasPasskey || passkeysSupported()}
+            <div class="flex items-center justify-between gap-4 py-3 last:pb-0">
+              <p class="text-sm text-muted-foreground m-0">
+                {deviceLock.hasPasskey
+                  ? "Face ID / Touch ID unlocks this device."
+                  : "Unlock this device with Face ID / Touch ID instead of typing your passcode."}
+              </p>
+              {#if deviceLock.hasPasskey}
+                <button
+                  class="btn-outline shrink-0"
+                  type="button"
+                  onclick={removePasskey}
+                >
+                  Remove passkey
+                </button>
+              {:else}
+                <button
+                  class="btn-outline shrink-0"
+                  type="button"
+                  onclick={addPasskey}
+                  disabled={passkeyBusy}
+                >
+                  {passkeyBusy ? "Waiting…" : "Add passkey"}
+                </button>
+              {/if}
+            </div>
+          {/if}
         </div>
       {/if}
     </section>

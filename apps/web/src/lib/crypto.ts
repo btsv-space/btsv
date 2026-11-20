@@ -22,6 +22,38 @@ export function base64ToBytes(s: string): TBytes {
   return bytes;
 }
 
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+export function base64UrlToBytes(s: string): TBytes {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  return base64ToBytes(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
+}
+
+const PASSKEY_HKDF_INFO = "btsv-device-key-v1";
+
+export async function derivePasskeyKek(prfOutput: TBytes): Promise<CryptoKey> {
+  const base = await crypto.subtle.importKey("raw", prfOutput, "HKDF", false, [
+    "deriveKey",
+  ]);
+  return crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: new Uint8Array(0),
+      info: new TextEncoder().encode(PASSKEY_HKDF_INFO),
+    },
+    base,
+    { name: "AES-GCM", length: KEY_LENGTH_BITS },
+    false,
+    ["encrypt", "decrypt"],
+  );
+}
+
 export function randomBytes(length: number): TBytes {
   return crypto.getRandomValues(new Uint8Array(length));
 }

@@ -45,12 +45,14 @@ describe("device key", () => {
     const raw = localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)!;
     expect(raw).not.toContain(PASSCODE);
     const record = JSON.parse(raw) as IDeviceLockRecord;
-    expect(record.type).toBe("passcode");
-    expect(record.v).toBe(1);
-    expect(record.iterations).toBe(KEK_PBKDF2_ITERATIONS);
-    expect(record.kekSalt).toBeTruthy();
-    expect(record.wrapIv).toBeTruthy();
-    expect(record.wrappedDek).toBeTruthy();
+    expect(record.v).toBe(2);
+    expect(record.passcode?.type).toBe("passcode");
+    expect(record.passcode?.iterations).toBe(KEK_PBKDF2_ITERATIONS);
+    expect(record.passcode?.kekSalt).toBeTruthy();
+    expect(record.passcode?.wrapIv).toBeTruthy();
+    expect(record.passcode?.wrappedDek).toBeTruthy();
+    expect(record.passkey).toBeUndefined();
+    expect(deviceLock.hasPasskey).toBe(false);
 
     expect(deviceLock.getDek()).toHaveLength(32);
   });
@@ -140,6 +142,66 @@ describe("device key", () => {
     expect(deviceLock.state).toBe("unconfigured");
     expect(localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)).toBeNull();
     expect(() => deviceLock.getDek()).toThrow();
+  });
+
+  it("starts locked with a registered passkey", async () => {
+    const wrap = { wrapIv: "AAAA", wrappedDek: "BBBB" };
+    localStorage.setItem(
+      DEVICE_LOCK_STORAGE_KEY,
+      JSON.stringify({
+        v: 2,
+        passcode: {
+          type: "passcode",
+          kekSalt: "AAAA",
+          iterations: KEK_PBKDF2_ITERATIONS,
+          ...wrap,
+        },
+        passkey: {
+          type: "passkey",
+          credentialId: "credential",
+          prfSalt: "salt",
+          rpId: "localhost",
+          ...wrap,
+        },
+      }),
+    );
+
+    const { deviceLock } = await importDevice();
+    expect(deviceLock.state).toBe("locked");
+    expect(deviceLock.hasPasskey).toBe(true);
+  });
+
+  it("removing the passkey keeps the passcode wrap", async () => {
+    const wrap = { wrapIv: "AAAA", wrappedDek: "BBBB" };
+    localStorage.setItem(
+      DEVICE_LOCK_STORAGE_KEY,
+      JSON.stringify({
+        v: 2,
+        passcode: {
+          type: "passcode",
+          kekSalt: "AAAA",
+          iterations: KEK_PBKDF2_ITERATIONS,
+          ...wrap,
+        },
+        passkey: {
+          type: "passkey",
+          credentialId: "credential",
+          prfSalt: "salt",
+          rpId: "localhost",
+          ...wrap,
+        },
+      }),
+    );
+
+    const { deviceLock } = await importDevice();
+    deviceLock.removePasskey();
+
+    expect(deviceLock.hasPasskey).toBe(false);
+    const record = JSON.parse(
+      localStorage.getItem(DEVICE_LOCK_STORAGE_KEY)!,
+    ) as IDeviceLockRecord;
+    expect(record.passkey).toBeUndefined();
+    expect(record.passcode).toBeTruthy();
   });
 
   it("clears a corrupt record instead of bricking the app", async () => {
