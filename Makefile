@@ -70,17 +70,11 @@ test-proxy:
 test-e2e: test-e2e-web
 
 test-e2e-web:
-	@echo "Running E2E tests (starting Go backend on :8090)..."
-	@kill $$(lsof -t -i :8090) 2>/dev/null || true; \
-	kill $$(lsof -t -i :5173) 2>/dev/null || true; \
+	@echo "Running E2E tests (Playwright starts vite itself; needs .env.e2e)..."
+	@kill $$(lsof -t -i :5173) 2>/dev/null || true; \
 	sleep 1; \
 	set -a; [ -f .env.e2e ] && . .env.e2e; set +a; \
-	trap 'kill 0' EXIT; \
-	(cd apps/api && DATA_DIR=/tmp/btsv-e2e-test PORT=8090 go run ./cmd/server) & \
-	sleep 3; \
-	cd apps/web && pnpm test:e2e:parallel $(ARGS); PARALLEL=$$?; \
-	pnpm test:e2e:sequential; SEQUENTIAL=$$?; \
-	exit $$(($$PARALLEL | $$SEQUENTIAL))
+	cd apps/web && pnpm test:e2e $(ARGS)
 
 build: build-web build-api build-proxy
 

@@ -1,16 +1,15 @@
 # apps/web
 
-<sub>README current as of [`2f3dec8`](https://github.com/btsv-space/btsv/commit/2f3dec8) (2026-08-21).</sub>
-
-SvelteKit 5 frontend — a local-first markdown+ editor built as a static SPA with PWA support.
+SvelteKit 5 frontend — a local-first markdown+ editor built as a static SPA with
+PWA support. No backend: the app talks to the GitHub API directly and keeps all
+of its state in the browser.
 
 ## Tech stack
 
 - **SvelteKit 5** with Svelte 5 runes (`$state`, `$derived`, `$effect`)
 - **adapter-static** with SPA fallback (`ssr = false`)
-- **isomorphic-git** — clone, pull, commit, push from the browser
-- **lightning-fs** — in-memory filesystem for isomorphic-git
-- **idb** — IndexedDB wrapper for the local post cache
+- **idb** — IndexedDB for posts, projects and encrypted tokens
+- **Web Crypto** — PBKDF2 + AES-GCM for the device lock and token encryption
 - **@vite-pwa/sveltekit** — installable PWA, offline precache
 - **TypeScript** + **ESLint** + **Prettier**
 
@@ -18,19 +17,18 @@ SvelteKit 5 frontend — a local-first markdown+ editor built as a static SPA wi
 
 ```
 src/routes/
-├── +layout.svelte          Global shell (navbar + auth state)
+├── +layout.svelte          Shell: device gate, header, settings shortcut
 ├── +layout.ts              export const ssr = false
 ├── login/
-│   └── +page.svelte        Login / register form
-└── (app)/                  Protected route group
-    ├── +layout.svelte      Auth guard (redirects to /login if unauthenticated)
-    ├── +page.svelte        / → recent project, else /projects
+│   └── +page.ts            307 → /projects (the login route is gone)
+└── (app)/                  Rendered only while the device is unlocked
+    ├── +layout.svelte      Projects hydration + background clone loop
+    ├── +page.svelte        / → most recently synced project, else /projects
     ├── projects/
-    │   └── +page.svelte    Project list — create / connect repos
+    │   └── +page.svelte    Project list — add / connect a repo
     ├── settings/
-    │   └── +page.svelte    User settings (sync mode, proxy URL)
+    │   └── +page.svelte    Device name, passcode, reset
     └── [projectId]/
-        ├── +layout.svelte  Project bootstrap (clone / open repo)
         ├── +page.svelte    Post list — sort & filter
         └── [postId]/
             └── +page.svelte  Post editor
@@ -38,61 +36,60 @@ src/routes/
 
 ## Modules (`src/lib/`)
 
-| File                   | Purpose                                                                     |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `api.ts`               | Typed fetch wrapper for the Go backend (`http://localhost:8080/api`)        |
-| `crypto.ts`            | Client-side token encryption — password-derived KEK wraps a per-user DEK    |
-| `db.ts`                | IndexedDB layer — CRUD for the local post cache                             |
-| `fs.ts`                | lightning-fs filesystem for isomorphic-git                                  |
-| `parser.ts`            | markdown+ frontmatter parse / serialize                                     |
-| `postsList.ts`         | Post list sort & filter logic                                               |
-| `saver.ts`             | Debounced autosave to IndexedDB                                             |
-| `tagsAutocomplete.ts`  | Tag suggestions in the editor                                               |
-| `sync/`                | Git sync engine — `syncer.ts` plus `git-adapter.ts` / `api-adapter.ts`      |
-| `stores/`              | Svelte 5 rune stores (auth, projects, prefs, sync status, …)                |
-| `components/`          | Shared UI components                                                        |
-| `contract/`            | Generated frontmatter types (`pnpm generate-frontmatter`)                   |
-| `shared/`              | Shared types, constants, utils                                              |
+| File                  | Purpose                                                                  |
+| --------------------- | ------------------------------------------------------------------------ |
+| `crypto.ts`           | PBKDF2 KEK derivation, AES-GCM encrypt/decrypt, random bytes             |
+| `db.ts`               | IndexedDB layer — posts, projects, secrets                               |
+| `fs.ts`               | Browser filesystem for clones (lightning-fs)                             |
+| `parser.ts`           | markdown+ frontmatter parse / serialize                                  |
+| `reset.ts`            | Full local wipe — lock, device keys, IDB, filesystem                     |
+| `postsList.ts`        | Post list sort & filter logic                                            |
+| `saver.ts`            | Debounced autosave to IndexedDB                                          |
+| `secrets.ts`          | Token encrypt/decrypt + the unlocked-state guard                         |
+| `tagsAutocomplete.ts` | Tag suggestions in the editor                                            |
+| `sync/`               | `syncer.ts` (queue/commit loop) + `api-adapter.ts` (GitHub REST/GraphQL) |
+| `stores/`             | Rune stores — device lock, projects, prefs, sync status, store classes   |
+| `components/`         | Shared UI — gate, nav, info tip, dialogs                                 |
+| `contract/`           | Generated frontmatter types (`pnpm generate-frontmatter`)                |
+| `shared/`             | Types, constants, copy, utils                                            |
+
+`sync/git-adapter.ts` is a leftover from the isomorphic-git/proxy design; the app
+only uses `api-adapter.ts`.
 
 ## Scripts
 
 ```sh
-pnpm dev                   # Start dev server (http://localhost:5173)
-pnpm build                 # Production build → build/
-pnpm preview               # Preview production build
+pnpm dev                   # http://localhost:5173
+pnpm build                 # static build → build/
+pnpm preview               # serve the build locally
 pnpm lint                  # Prettier + ESLint
-pnpm format                # Auto-fix formatting
-pnpm check                 # svelte-check type checking
-pnpm test                  # Unit tests (vitest)
-pnpm test:e2e              # Playwright E2E (parallel + sequential projects)
-pnpm generate-frontmatter  # Regenerate TS types from contract/frontmatter.schema.json
+pnpm format                # auto-fix formatting
+pnpm check                 # svelte-check
+pnpm test                  # unit tests (vitest, node env)
+pnpm test:e2e              # Playwright (parallel + sequential projects)
+pnpm generate-frontmatter  # regenerate TS types from contract/frontmatter.schema.json
 ```
 
-## Environment
+`VITE_GIT_COMMIT` and `VITE_BUILD_TIME` are injected at build time and shown in
+the settings footer. There are no API or proxy URLs to configure.
 
-| Variable         | Default                     | Description                  |
-| ---------------- | --------------------------- | ---------------------------- |
-| `VITE_API_URL`   | `http://localhost:8080/api` | Backend API base URL         |
-| `VITE_PROXY_URL` | `http://localhost:9999`     | Git CORS proxy URL           |
+## Device lock
 
-`VITE_GIT_COMMIT` and `VITE_BUILD_TIME` are injected automatically at build time.
+1. First run: a passcode derives a KEK (PBKDF2, 600k iterations) which wraps a
+   random 32-byte DEK; only the wrapped DEK is stored (`btsv:deviceLock`)
+2. Each project's GitHub token is encrypted with the DEK and stored in the
+   IndexedDB `secrets` store
+3. The DEK is kept in memory only, so every page load starts locked; unlocking
+   re-derives the KEK and unwraps it
+4. "Change passcode" re-wraps the same DEK; "Lock now" drops it from memory
+5. "Reset device" wipes the lock, tokens, projects, posts and the filesystem
 
-## Auth flow
+## Sync flow
 
-1. User logs in via `/login` → POST to API → server sets `HttpOnly` session cookie
-2. All subsequent API calls include the cookie (`credentials: 'include'`)
-3. Auth state is tracked via `$state` runes in `stores/auth.svelte.ts`
-4. Protected routes redirect to `/login` if unauthenticated
-5. At login/register the frontend derives a KEK from the password (PBKDF2) and
-   unwraps the per-user DEK used for token encryption (see `crypto.ts`)
-
-## Git flow
-
-1. User creates a project (name + repo URL) via the API
-2. User enters a Git PAT, which is encrypted client-side with the DEK and stored
-   via `POST /api/projects/:id/secret` (`{ ciphertext, iv }`)
-3. Frontend fetches the encrypted blob via `GET /api/projects/:id/secret` and
-   decrypts it in-memory
-4. Token is used in-memory with isomorphic-git — plaintext is never persisted
-   client-side
-5. Documents are edited locally, committed, and pushed to the connected repo
+1. Add a project (name + repo URL) and a fine-grained PAT
+2. The token is encrypted with the DEK before it touches IndexedDB
+3. The syncer queues dirty posts, commits them through the GitHub API, and
+   records the project's last sync time (`btsv:projectCommits`)
+4. Pulls compare against the stored base sha, so a push never skips remote work
+5. Edits are saved to IndexedDB first; network failures leave posts dirty and
+   they retry on the next sync
