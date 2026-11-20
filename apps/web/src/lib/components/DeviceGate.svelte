@@ -55,19 +55,19 @@
       <p
         class="text-sm text-foreground bg-destructive/10 border border-destructive/40 rounded-md p-3 leading-relaxed m-0"
       >
-        {SECURITY_COPY.wipeWarning}
+        {SECURITY_COPY.resetWarning}
       </p>
 
       <div class="flex justify-between gap-2">
-        <button class="btn-destructive" type="button" onclick={handleReset}>
-          Reset device
-        </button>
         <button
           class="btn-secondary"
           type="button"
           onclick={() => (confirmingReset = false)}
         >
           Cancel
+        </button>
+        <button class="btn-destructive" type="button" onclick={handleReset}>
+          Reset device
         </button>
       </div>
     </div>
@@ -82,8 +82,7 @@
 
       {#if isSetup}
         <p class="text-sm text-muted-foreground m-0">
-          {SECURITY_COPY.deviceIntro}
-          {SECURITY_COPY.passcodePurpose}
+          {SECURITY_COPY.setupIntro}
         </p>
         <p class="text-sm text-muted-foreground m-0">
           {SECURITY_COPY.noRecovery}
