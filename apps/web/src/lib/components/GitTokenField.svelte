@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from "@lucide/svelte";
+  import { CircleHelp, ExternalLink } from "@lucide/svelte";
   import { GITHUB_TOKEN_URL } from "$lib/shared/constants";
 
   let {
@@ -15,17 +15,22 @@
   let showTokenHelp = $state(false);
 </script>
 
-<label class="flex flex-col gap-1 text-xs text-muted-foreground font-medium">
-  <span class="flex items-center gap-2">
-    Git Token {#if required}<span class="text-destructive">*</span>{/if}
+<div class="flex flex-col gap-1">
+  <div class="flex items-center gap-1">
+    <label for={id} class="text-xs text-muted-foreground font-medium">
+      Git Token {#if required}<span class="text-destructive">*</span>{/if}
+    </label>
     <button
       type="button"
-      class="bg-none border-none text-primary cursor-pointer text-xs p-0"
+      class="bg-none border-none p-0 text-muted-foreground hover:text-foreground cursor-pointer leading-none"
+      aria-label="How to create a token"
+      aria-expanded={showTokenHelp}
       onclick={() => (showTokenHelp = !showTokenHelp)}
     >
-      {showTokenHelp ? "Hide help" : "(?)"}
+      <CircleHelp class="h-3.5 w-3.5" />
     </button>
-  </span>
+  </div>
+
   <input
     {id}
     type="password"
@@ -35,59 +40,44 @@
     placeholder="github_pat_..."
     class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground"
   />
-</label>
 
-{#if showTokenHelp}
-  <div
-    class="relative text-sm text-foreground bg-muted/40 border border-border rounded-md p-3 leading-relaxed"
-  >
-    <button
-      type="button"
-      class="absolute top-2 right-2 p-0 text-muted-foreground hover:text-foreground cursor-pointer"
-      onclick={() => (showTokenHelp = false)}
-      aria-label="Close help"
+  {#if showTokenHelp}
+    <div
+      class="mt-1 flex flex-col gap-3 rounded-md border border-input p-3 text-sm leading-relaxed text-muted-foreground"
     >
-      <X class="w-4 h-4" />
-    </button>
-    <ol class="list-decimal list-inside space-y-2 m-0 pt-2">
-      <li>
-        Open GitHub → Settings → Developer settings → Fine-grained tokens →
-        Generate new token
-      </li>
-      <li>
-        <strong>Repository access:</strong> Only select repositories → choose your
-        blog repo
-      </li>
-      <li>
-        <strong>Permissions</strong> (only one needed):
-        <code
-          class="text-xs bg-background px-1.5 py-0.5 rounded-sm border border-border"
-          >Contents → Read &amp; Write</code
-        >
-      </li>
-      <li>
-        Copy the token. It starts with <code
-          class="text-xs bg-background px-1.5 py-0.5 rounded-sm border border-border"
-          >github_pat_</code
-        >
-      </li>
-    </ol>
-    <a
-      href={GITHUB_TOKEN_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      class="inline-flex items-center gap-1 mt-3 text-sm font-medium text-primary hover:underline"
-    >
-      Open GitHub token page
-      <svg class="w-3 h-3" viewBox="0 0 12 12" fill="none"
-        ><path
-          d="M1 11L11 1M11 1H4M11 1V8"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        /></svg
+      <p class="m-0 font-medium text-foreground">Create a fine-grained token</p>
+
+      <ol class="m-0 flex list-outside list-decimal flex-col gap-2 pl-5">
+        <li>
+          GitHub → Settings → Developer settings → Fine-grained tokens →
+          Generate new token
+        </li>
+        <li>Repository access: Only select repositories → your blog repo</li>
+        <li>
+          Permissions:
+          <code
+            class="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground"
+            >Contents → Read &amp; Write</code
+          >, nothing else
+        </li>
+        <li>
+          Copy the token — it starts with
+          <code
+            class="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground"
+            >github_pat_</code
+          >
+        </li>
+      </ol>
+
+      <a
+        href={GITHUB_TOKEN_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-1 self-start text-sm font-medium hover:underline"
       >
-    </a>
-  </div>
-{/if}
+        Open GitHub token page
+        <ExternalLink class="h-3.5 w-3.5" />
+      </a>
+    </div>
+  {/if}
+</div>

@@ -21,6 +21,7 @@
   import { DEFAULT_LIST_PREFS, isDefaultListPrefs } from "$lib/postsList";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import EditTokenModal from "$lib/components/EditTokenModal.svelte";
+  import LinkDeviceModal from "$lib/components/LinkDeviceModal.svelte";
   import Popover from "$lib/components/Popover.svelte";
   import {
     FilePlus,
@@ -28,6 +29,7 @@
     ChevronRight,
     ChevronDown,
     Wrench,
+    QrCode,
     ArrowDownWideNarrow,
     ArrowUpNarrowWide,
   } from "@lucide/svelte";
@@ -132,6 +134,7 @@
   let retrying = $state(false);
   let retryError = $state("");
   let editingToken = $state(false);
+  let linkingDevice = $state(false);
 
   const projectEntry = $derived(getProject(projectId));
 
@@ -249,6 +252,14 @@
   </div>
 {:else if projectEntry.status === "ready"}
   <div class="-mt-2 mb-4 flex items-center gap-2">
+    <button
+      class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 px-3 rounded-full"
+      onclick={() => {
+        linkingDevice = true;
+      }}
+    >
+      <QrCode class="icon" /> Show QR
+    </button>
     <button
       class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 px-3 rounded-full"
       onclick={() => {
@@ -512,6 +523,13 @@
       show={editingToken}
       onclose={() => {
         editingToken = false;
+      }}
+    />
+    <LinkDeviceModal
+      project={projectEntry}
+      show={linkingDevice}
+      onclose={() => {
+        linkingDevice = false;
       }}
     />
   {/if}
