@@ -39,6 +39,7 @@ export default defineConfig({
     sveltekit(),
     SvelteKitPWA({
       registerType: "prompt",
+      injectRegister: false,
       manifest: {
         name: "btsv",
         short_name: "btsv",
@@ -73,6 +74,7 @@ export default defineConfig({
       workbox: {
         globPatterns: [
           "client/**/*.{js,css,ico,png,svg,woff2,webmanifest}",
+          "theme-init.js",
           "prerendered/**/*.{html,json}",
         ],
         navigateFallbackDenylist: [/^\/api\//],

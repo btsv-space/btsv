@@ -7,7 +7,27 @@ const config = {
     runes: ({ filename }) =>
       filename.split(/[/\\]/).includes("node_modules") ? undefined : true,
   },
-  kit: { adapter: adapter({ fallback: "index.html" }) },
+  kit: {
+    adapter: adapter({ fallback: "index.html" }),
+    // Hashes are generated per build, so the policy ships as a <meta> tag;
+    // frame-ancestors cannot be set from a meta tag and lives in static/_headers.
+    csp: {
+      mode: "hash",
+      directives: {
+        "default-src": ["self"],
+        "script-src": ["self"],
+        "style-src": ["self", "unsafe-inline"],
+        "img-src": ["self", "data:", "blob:"],
+        "font-src": ["self"],
+        "connect-src": ["self", "https://api.github.com"],
+        "worker-src": ["self"],
+        "manifest-src": ["self"],
+        "object-src": ["none"],
+        "base-uri": ["self"],
+        "form-action": ["self"],
+      },
+    },
+  },
 };
 
 export default config;

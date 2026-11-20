@@ -1,0 +1,8 @@
+# Read by Cloudflare Pages and Netlify. The CSP itself ships as a <meta> tag
+# (svelte.config.js -> kit.csp) because its script hashes change every build;
+# frame-ancestors is the one directive a meta tag cannot express.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
