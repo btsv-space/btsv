@@ -34,7 +34,7 @@ syncer.addAfterSyncHook((projectId, postId, syncedPost, lastCommitTime) => {
 });
 
 const defaultLoadPostsOpts = {
-  pullOption: "check",
+  alwaysPull: false,
   page: 1,
   pageSize: POSTS_PAGE_SIZE,
 } satisfies ILoadPostsOpts;
@@ -51,7 +51,7 @@ export async function loadPosts(
   opts: ILoadPostsOpts = {},
 ): Promise<IPostRecord[]> {
   await ensureStoresReady();
-  const { pullOption, page, pageSize, listPrefs } = {
+  const { alwaysPull, page, pageSize, listPrefs } = {
     ...defaultLoadPostsOpts,
     ...opts,
   };
@@ -63,9 +63,7 @@ export async function loadPosts(
     return [];
   }
 
-  const shouldPull = pullOption === "always";
-
-  if (shouldPull) {
+  if (alwaysPull) {
     await syncer.pull(project);
     console.log(`[loadPosts] ${projectId}: page=${page} using pulled posts`);
   } else {

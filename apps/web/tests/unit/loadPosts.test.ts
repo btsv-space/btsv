@@ -22,7 +22,7 @@ vi.mock("$lib/fs", () => ({
 }));
 
 // The real Syncer pulls in fs/parser/crypto/api; loadPosts never touches it
-// with pullOption "never", so a stub is enough (module level calls
+// with alwaysPull: false, so a stub is enough (module level calls
 // addAfterSyncHook once).
 vi.mock("$lib/sync/syncer", () => ({
   Syncer: class {
@@ -78,7 +78,7 @@ describe("loadPosts", () => {
       page: "all",
     };
 
-    await loadPosts("proj-1", { pullOption: "never", page: 2, listPrefs });
+    await loadPosts("proj-1", { page: 2, listPrefs });
 
     expect(mockDbGetPosts).toHaveBeenCalledWith("proj-1", {
       limit: 15,
@@ -90,7 +90,7 @@ describe("loadPosts", () => {
   it("passes listPrefs: undefined when not provided (dbGetPosts applies defaults)", async () => {
     const { loadPosts } = await import("$lib/stores/syncer.svelte");
 
-    await loadPosts("proj-1", { pullOption: "never", page: 1 });
+    await loadPosts("proj-1", { page: 1 });
 
     expect(mockDbGetPosts).toHaveBeenCalledWith("proj-1", {
       limit: 15,
@@ -112,12 +112,10 @@ describe("loadPosts", () => {
     const { loadPosts } = await import("$lib/stores/syncer.svelte");
 
     let settled = false;
-    const pending = loadPosts("proj-1", { pullOption: "never", page: 1 }).then(
-      (r) => {
-        settled = true;
-        return r;
-      },
-    );
+    const pending = loadPosts("proj-1", { page: 1 }).then((r) => {
+      settled = true;
+      return r;
+    });
 
     // drain the microtask queue + one macrotask: loadPosts must still be
     // gated on hydration (no premature "project not found" empty return)

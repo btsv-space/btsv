@@ -67,7 +67,7 @@
     if (currentPage > 1) {
       goto(`/${projectId}?page=1`); // afterNavigate reloads
     } else {
-      void loadPage({ pullOption: "never", page: 1 });
+      void loadPage({ page: 1 });
     }
   }
 
@@ -106,14 +106,13 @@
   onMount(async () => {
     // populate cached posts
     posts = await loadPosts(projectId, {
-      pullOption: "never",
       page: currentPage,
       listPrefs,
     });
     postsLoaded = true;
     // load posts from pull
     console.log(`[/:projectId] onMount: loading posts`);
-    await loadPage({ pullOption: "always", page: currentPage });
+    await loadPage({ alwaysPull: true, page: currentPage });
   });
 
   onMount(() => {
@@ -121,13 +120,13 @@
     const unsubAfterSync = syncer.addAfterSyncHook((hookProjectId) => {
       if (hookProjectId !== projectId) return;
       // just synced, no need to sync again, if not it'll be infinite
-      void loadPage({ pullOption: "never", page: currentPage });
+      void loadPage({ page: currentPage });
     });
     return unsubAfterSync;
   });
 
   afterNavigate(() => {
-    void loadPage({ pullOption: "check", page: currentPage });
+    void loadPage({ page: currentPage });
   });
 
   let retrying = $state(false);
@@ -189,7 +188,7 @@
     projectEntry.status = "cloning";
     projectEntry.error = "";
     try {
-      await loadPage({ pullOption: "always", page: currentPage });
+      await loadPage({ alwaysPull: true, page: currentPage });
       projectEntry.status = "ready";
     } catch (err) {
       projectEntry.status = "error";

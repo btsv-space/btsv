@@ -168,7 +168,7 @@ export interface ISyncerConfig {
 }
 
 export interface ILoadPostsOpts {
-  pullOption?: "always" | "check" | "never";
+  alwaysPull?: boolean;
   page?: number;
   pageSize?: number;
   listPrefs?: IPostsListPrefs;
