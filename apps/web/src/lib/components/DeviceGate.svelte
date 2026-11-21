@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Lock, TriangleAlert } from "@lucide/svelte";
+  import { FingerprintPattern, Lock, TriangleAlert } from "@lucide/svelte";
   import { PASSCODE_MIN_LENGTH } from "$lib/shared/constants";
   import { SECURITY_COPY } from "$lib/shared/copy";
   import { wipeLocalData } from "$lib/reset";
@@ -11,7 +11,7 @@
   let busy = $state(false);
   let confirmingReset = $state(false);
 
-  const isSetup = $derived(deviceLock.state === "unconfigured");
+  const needsSetup = $derived(deviceLock.state === "unconfigured");
 
   async function submit(e: Event) {
     e.preventDefault();
@@ -19,7 +19,7 @@
     busy = true;
 
     try {
-      if (isSetup) {
+      if (needsSetup) {
         if (passcode !== confirmPasscode) {
           throw new Error("Passcodes do not match");
         }
@@ -84,32 +84,23 @@
       </div>
     </div>
   {:else}
-    <form class="card w-full max-w-sm flex flex-col gap-4" onsubmit={submit}>
+    <form
+      class="card relative w-full max-w-sm flex flex-col gap-4"
+      onsubmit={submit}
+    >
       <div class="flex items-center gap-2">
         <Lock class="icon" />
         <h1 class="text-lg font-semibold m-0">
-          {isSetup ? "Protect this device" : "Unlock"}
+          {needsSetup ? "Protect this device" : "Unlock"}
         </h1>
       </div>
 
-      {#if isSetup}
+      {#if needsSetup}
         <p class="text-sm text-muted-foreground m-0">
           {SECURITY_COPY.setupIntro}
         </p>
         <p class="text-sm text-muted-foreground m-0">
           {SECURITY_COPY.noRecovery}
-        </p>
-      {:else if deviceLock.hasPasskey}
-        <button
-          class="btn-primary w-full"
-          type="button"
-          onclick={unlockWithPasskey}
-          disabled={busy}
-        >
-          {busy ? "Waiting…" : "Unlock with passkey"}
-        </button>
-        <p class="text-xs text-muted-foreground m-0 text-center">
-          or enter your passcode
         </p>
       {:else}
         <p class="text-sm text-muted-foreground m-0">
@@ -131,7 +122,7 @@
         <span>Passcode</span>
         <input
           type="password"
-          autocomplete={isSetup ? "new-password" : "current-password"}
+          autocomplete={needsSetup ? "new-password" : "current-password"}
           bind:value={passcode}
           required
           minlength={PASSCODE_MIN_LENGTH}
@@ -140,7 +131,7 @@
         />
       </label>
 
-      {#if isSetup}
+      {#if needsSetup}
         <label
           class="flex flex-col gap-1 text-xs text-muted-foreground font-medium"
         >
@@ -158,7 +149,7 @@
       {/if}
 
       <div class="flex items-center justify-between gap-2 mt-2">
-        {#if !isSetup}
+        {#if !needsSetup}
           <button
             class="bg-none border-none text-primary cursor-pointer text-sm p-0"
             type="button"
@@ -171,12 +162,24 @@
         {/if}
         <button class="btn-primary" type="submit" disabled={busy}>
           {#if busy}
-            {isSetup ? "Setting up..." : "Unlocking..."}
+            {needsSetup ? "Setting up..." : "Unlocking..."}
           {:else}
-            {isSetup ? "Set passcode" : "Unlock"}
+            {needsSetup ? "Set passcode" : "Unlock"}
           {/if}
         </button>
       </div>
+      {#if !needsSetup && deviceLock.hasPasskey}
+        <button
+          class="absolute left-1/2 top-full mt-6 -translate-x-1/2 size-12 border border-border bg-card text-card-foreground hover:bg-accent"
+          type="button"
+          aria-label="Unlock with passkey"
+          title="Unlock with passkey"
+          onclick={unlockWithPasskey}
+          disabled={busy}
+        >
+          <FingerprintPattern class="icon" />
+        </button>
+      {/if}
     </form>
   {/if}
 </div>
