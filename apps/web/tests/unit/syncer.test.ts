@@ -492,12 +492,20 @@ describe("Syncer", () => {
       expect(mockSavePost).toHaveBeenCalledTimes(1);
     });
 
-    it("calls mergeToMain when a published post is synced", async () => {
-      const post = makeDirtyPost({ draft: false });
-      mockGetDirtyPosts.mockResolvedValue([post]);
+    it("does not merge on the automatic loop", async () => {
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost({ draft: false })]);
 
       syncer.start();
       await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockAdapterCommitAndPush).toHaveBeenCalledTimes(1);
+      expect(mockAdapterMergeToMain).not.toHaveBeenCalled();
+    });
+
+    it("merges to main on an explicit push", async () => {
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost({ draft: false })]);
+
+      await syncer.push(makeMockProjectEntry(), { merge: true });
 
       expect(mockAdapterMergeToMain).toHaveBeenCalledTimes(1);
       expect(mockAdapterMergeToMain).toHaveBeenCalledWith(
@@ -506,35 +514,30 @@ describe("Syncer", () => {
       );
     });
 
-    it("does not call mergeToMain when only drafts are synced", async () => {
-      const post = makeDirtyPost({ draft: true });
-      mockGetDirtyPosts.mockResolvedValue([post]);
+    it("does not merge when only drafts are pushed", async () => {
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost({ draft: true })]);
 
-      syncer.start();
-      await vi.advanceTimersByTimeAsync(0);
+      await syncer.push(makeMockProjectEntry(), { merge: true });
 
       expect(mockAdapterMergeToMain).not.toHaveBeenCalled();
     });
 
-    it("calls mergeToMain once when multiple published posts are synced", async () => {
+    it("merges once for multiple published posts on an explicit push", async () => {
       mockGetDirtyPosts.mockResolvedValue([
         makeDirtyPost({ id: "post-1", draft: false }),
         makeDirtyPost({ id: "post-2", draft: false }),
       ]);
 
-      syncer.start();
-      await vi.advanceTimersByTimeAsync(0);
+      await syncer.push(makeMockProjectEntry(), { merge: true });
 
       expect(mockAdapterMergeToMain).toHaveBeenCalledTimes(1);
     });
 
-    it("does not call mergeToMain when sync fails", async () => {
-      const post = makeDirtyPost({ draft: false });
-      mockGetDirtyPosts.mockResolvedValue([post]);
+    it("does not merge when an explicit push fails", async () => {
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost({ draft: false })]);
       mockAdapterCommitAndPush.mockRejectedValue(new Error("push failed"));
 
-      syncer.start();
-      await vi.advanceTimersByTimeAsync(0);
+      await syncer.push(makeMockProjectEntry(), { merge: true });
 
       expect(mockAdapterMergeToMain).not.toHaveBeenCalled();
     });
@@ -702,13 +705,13 @@ describe("Syncer", () => {
       expect(mockSavePost).not.toHaveBeenCalled();
     });
 
-    it("calls mergeToMain after deleting a published post", async () => {
-      const post = makeDirtyPost({ deleted: true, draft: false });
-      mockGetDirtyPosts.mockResolvedValue([post]);
+    it("merges to main after deleting a published post on an explicit push", async () => {
+      mockGetDirtyPosts.mockResolvedValue([
+        makeDirtyPost({ deleted: true, draft: false }),
+      ]);
       mockAdapterCommitDeletion.mockResolvedValue("sha-deleted");
 
-      syncer.start();
-      await vi.advanceTimersByTimeAsync(0);
+      await syncer.push(makeMockProjectEntry(), { merge: true });
 
       // Deletion commit was pushed to staging; merge staging→main includes it.
       expect(mockAdapterMergeToMain).toHaveBeenCalledWith(

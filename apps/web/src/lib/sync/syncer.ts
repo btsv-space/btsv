@@ -242,7 +242,7 @@ export class Syncer {
 
   async push(
     project: TProjectEntry,
-    opts: { force?: boolean } = {},
+    opts: { force?: boolean; merge?: boolean } = {},
   ): Promise<boolean> {
     if (!opts.force && this.#isPaused(project.id)) return false;
 
@@ -328,7 +328,7 @@ export class Syncer {
           }
         }
 
-        if (anyPublished && allOk && lastToken) {
+        if (opts.merge && anyPublished && allOk && lastToken) {
           try {
             await adapter.mergeToMain(project.id, lastToken);
           } catch (err) {

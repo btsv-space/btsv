@@ -45,7 +45,7 @@
       return;
     }
     await syncer.markForDeletion(project, id);
-    syncer.push(project).catch(() => {});
+    syncer.push(project, { merge: true }).catch(() => {});
   }
 
   let workingPost = $state<IPostRecord | null>(null);
@@ -116,7 +116,7 @@
       await saver.flush();
     }
     const project = getProject(projectId);
-    if (project) await syncer.push(project);
+    if (project) await syncer.push(project, { merge: true });
   }
 
   async function handleBack() {
@@ -267,7 +267,7 @@
     unregisterHook?.();
     saver?.flush()?.then(() => {
       const project = getProject(projectId);
-      if (project) syncer.push(project);
+      if (project) syncer.push(project, { merge: true });
       destroyCurrentSaver();
     });
   });
