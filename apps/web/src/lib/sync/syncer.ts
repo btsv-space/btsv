@@ -63,6 +63,10 @@ export class Syncer {
     );
   }
 
+  #isPaused(projectId: string): boolean {
+    return this.config.isSyncPaused?.(projectId) ?? false;
+  }
+
   #setError(projectId: string, err: unknown, fallbackMsg: string): void {
     this.#setStatus(projectId, ESyncState.ERROR, {
       type: errorTypeFor(err),
@@ -111,7 +115,12 @@ export class Syncer {
 
   // ── Operations ──
 
-  async pull(project: TProjectEntry): Promise<IPostRecord[]> {
+  async pull(
+    project: TProjectEntry,
+    opts: { force?: boolean } = {},
+  ): Promise<IPostRecord[]> {
+    if (!opts.force && this.#isPaused(project.id)) return [];
+
     const q = this.projectQueue.get(project.id);
     // if the previous queue op is an active pull, just return that
     if (q?.lastOp === ESyncerOps.PULL && !q.lastOpResolved && q.lastPromise) {
@@ -231,7 +240,12 @@ export class Syncer {
     );
   }
 
-  async push(project: TProjectEntry): Promise<boolean> {
+  async push(
+    project: TProjectEntry,
+    opts: { force?: boolean } = {},
+  ): Promise<boolean> {
+    if (!opts.force && this.#isPaused(project.id)) return false;
+
     return this.#runSerial(
       project.id,
       async () => {
@@ -459,7 +473,7 @@ export class Syncer {
 
       for (const projectEntry of projectEntries) {
         if (projectEntry.status !== "ready") continue;
-        if (this.config.isSyncPaused?.(projectEntry.id)) continue;
+        if (this.#isPaused(projectEntry.id)) continue;
         await this.push(projectEntry);
       }
     } finally {

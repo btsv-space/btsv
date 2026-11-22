@@ -442,6 +442,39 @@ describe("Syncer", () => {
       pausedSyncer.stop();
     });
 
+    it("does not push while paused", async () => {
+      const pausedConfig = {
+        ...makeConfig(() => [makeMockProjectEntry()]),
+        isSyncPaused: vi.fn().mockReturnValue(true),
+      };
+      const pausedSyncer = new Syncer(pausedConfig);
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost()]);
+
+      const result = await pausedSyncer.push(makeMockProjectEntry());
+
+      expect(result).toBe(false);
+      expect(mockAdapterCommitAndPush).not.toHaveBeenCalled();
+      expect(pausedConfig.onSyncStatus).not.toHaveBeenCalled();
+      pausedSyncer.stop();
+    });
+
+    it("push with force runs while paused", async () => {
+      const pausedConfig = {
+        ...makeConfig(() => [makeMockProjectEntry()]),
+        isSyncPaused: vi.fn().mockReturnValue(true),
+      };
+      const pausedSyncer = new Syncer(pausedConfig);
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost()]);
+
+      const result = await pausedSyncer.push(makeMockProjectEntry(), {
+        force: true,
+      });
+
+      expect(result).toBe(true);
+      expect(mockAdapterCommitAndPush).toHaveBeenCalled();
+      pausedSyncer.stop();
+    });
+
     it("continues to next post when one fails", async () => {
       const post1 = makeDirtyPost({ id: "post-1" });
       const post2 = makeDirtyPost({ id: "post-2" });
@@ -977,6 +1010,33 @@ describe("Syncer", () => {
         },
         null,
       );
+    });
+
+    it("does not call the adapter while paused", async () => {
+      const pausedConfig = {
+        ...makeConfig(() => [makeMockProjectEntry()]),
+        isSyncPaused: vi.fn().mockReturnValue(true),
+      };
+      const pausedSyncer = new Syncer(pausedConfig);
+
+      const result = await pausedSyncer.pull(makeMockProjectEntry());
+
+      expect(result).toEqual([]);
+      expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
+      pausedSyncer.stop();
+    });
+
+    it("pull with force runs while paused", async () => {
+      const pausedConfig = {
+        ...makeConfig(() => [makeMockProjectEntry()]),
+        isSyncPaused: vi.fn().mockReturnValue(true),
+      };
+      const pausedSyncer = new Syncer(pausedConfig);
+
+      await pausedSyncer.pull(makeMockProjectEntry(), { force: true });
+
+      expect(mockAdapterCheckRemote).toHaveBeenCalled();
+      pausedSyncer.stop();
     });
   });
 

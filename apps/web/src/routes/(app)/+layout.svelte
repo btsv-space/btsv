@@ -27,7 +27,7 @@
       project.status = "cloning";
       project.error = "";
       void syncer
-        .pull(project)
+        .pull(project, { force: true })
         .then(() => {
           const failed = syncStatus.get(project.id)?.state === ESyncState.ERROR;
           project.status = failed ? "error" : "ready";

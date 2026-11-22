@@ -221,7 +221,9 @@
     projectEntry.status = "cloning";
     projectEntry.error = "";
     try {
-      await loadPage({ alwaysPull: true, page: currentPage });
+      // Retry is explicit: bypass the pause for one attempt.
+      await syncer.pull(projectEntry, { force: true });
+      await loadPage({ page: currentPage });
       projectEntry.status = "ready";
     } catch (err) {
       projectEntry.status = "error";
