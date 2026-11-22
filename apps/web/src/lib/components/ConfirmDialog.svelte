@@ -27,11 +27,11 @@
 >
   <div class="card max-w-100 w-[90%] shadow-xl">
     {#if title}
-      <h2 class="text-base font-semibold mb-3" class:text-destructive={danger}>
+      <h2 class="text-lg font-semibold mb-3" class:text-destructive={danger}>
         {title}
       </h2>
     {/if}
-    <p class="text-[15px] mb-4 text-foreground">{message}</p>
+    <p class="text-sm mb-4 text-foreground">{message}</p>
     <div class="flex gap-2 justify-end flex-wrap">
       {#if onCancel}
         <button class="btn-outline" onclick={onCancel}>

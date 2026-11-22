@@ -56,14 +56,14 @@
         <li>
           Permissions:
           <code
-            class="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground"
+            class="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground"
             >Contents → Read &amp; Write</code
           >, nothing else
         </li>
         <li>
           Copy the token — it starts with
           <code
-            class="rounded bg-muted px-1 py-0.5 font-mono text-[11px] text-foreground"
+            class="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground"
             >github_pat_</code
           >
         </li>

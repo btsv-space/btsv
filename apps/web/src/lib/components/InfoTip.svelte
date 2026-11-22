@@ -44,7 +44,7 @@
     <span
       {id}
       role="tooltip"
-      class="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-input bg-card p-2 text-[11px] leading-snug font-normal text-foreground shadow-md"
+      class="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-input bg-card p-2 text-xs leading-snug font-normal text-foreground shadow-md"
     >
       {text}
     </span>

@@ -103,9 +103,9 @@
 </script>
 
 <div class="flex flex-col items-center">
-  <div class="w-full max-w-2xl flex flex-col gap-6">
+  <div class="w-full max-w-2xl flex flex-col gap-4">
     <section class="card flex flex-col gap-4">
-      <h2 class="text-[15px] font-semibold m-0">Device</h2>
+      <h2 class="text-base font-semibold m-0">Device</h2>
 
       <div class="flex flex-col gap-1">
         <div class="flex items-center gap-1">
@@ -129,13 +129,13 @@
           onchange={saveName}
           placeholder="unnamed"
           aria-describedby={nameInfoOpen ? "device-name-help" : undefined}
-          class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+          class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground w-full box-border"
         />
       </div>
     </section>
 
     <section class="card flex flex-col gap-4">
-      <h2 class="text-[15px] font-semibold m-0">Security</h2>
+      <h2 class="text-base font-semibold m-0">Security</h2>
 
       {#if changingPasscode}
         <div
@@ -161,7 +161,7 @@
                 bind:value={currentPasscode}
                 required
                 disabled={passcodeBusy}
-                class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+                class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground w-full box-border"
               />
             </label>
             <label
@@ -175,7 +175,7 @@
                 required
                 minlength={PASSCODE_MIN_LENGTH}
                 disabled={passcodeBusy}
-                class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+                class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground w-full box-border"
               />
             </label>
             <label
@@ -189,7 +189,7 @@
                 required
                 minlength={PASSCODE_MIN_LENGTH}
                 disabled={passcodeBusy}
-                class="px-3 py-2 border border-input rounded-md text-[15px] font-inherit bg-background text-foreground w-full box-border"
+                class="px-3 py-2 border border-input rounded-md text-sm font-inherit bg-background text-foreground w-full box-border"
               />
             </label>
             <div class="flex justify-between gap-2">
@@ -268,7 +268,7 @@
 
     <section class="card flex flex-col gap-4">
       <div class="flex flex-col gap-1">
-        <h2 class="text-[15px] font-semibold m-0">Data</h2>
+        <h2 class="text-base font-semibold m-0">Data</h2>
         <p class="text-sm text-muted-foreground font-normal m-0">
           {SECURITY_COPY.dataIntro}
         </p>
@@ -319,7 +319,7 @@
   <div
     role="status"
     transition:fly={{ x: 64, duration: 200, opacity: 1 }}
-    class="fixed bottom-6 right-6 z-50 px-3 py-2 rounded-md shadow-lg text-sm border {saveState ===
+    class="fixed bottom-4 right-4 z-50 px-3 py-2 rounded-md shadow-lg text-sm border {saveState ===
     'saving'
       ? 'bg-muted text-muted-foreground'
       : saveState === 'success'
