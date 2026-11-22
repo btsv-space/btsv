@@ -1,3 +1,5 @@
+import type { TSyncErrorType } from "$lib/shared/types";
+
 export const SECURITY_COPY = {
   setupIntro:
     "Posts live on this device and sync to GitHub. Set a passcode so your GitHub tokens are encrypted at rest.",
@@ -10,3 +12,18 @@ export const SECURITY_COPY = {
   resetWarning:
     "All data will be removed from this device. This cannot be undone.",
 } as const;
+
+export function syncErrorTitle(
+  type: TSyncErrorType | null | undefined,
+): string {
+  switch (type) {
+    case "token-invalid":
+      return "Token expired";
+    case "no-token":
+      return "No token";
+    case "no-repo-access":
+      return "No repo access";
+    default:
+      return "Sync failed";
+  }
+}

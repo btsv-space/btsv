@@ -39,9 +39,16 @@ export interface IProject {
   repoUrl: string;
 }
 
+export type TSyncErrorType = "no-token" | "token-invalid" | "no-repo-access";
+
+export interface ISyncError {
+  type: TSyncErrorType | null;
+  message: string;
+}
+
 export interface ISyncStatus {
   state: ESyncState;
-  errorMsg: string;
+  error: ISyncError | null;
   dirty: boolean;
 }
 
@@ -174,6 +181,7 @@ export interface ISyncerConfig {
   getPrefs: () => IPreferences;
   getProjects: () => TProjectEntry[];
   isPostEditing?(projectId: string, postId: string): boolean;
+  isSyncPaused?(projectId: string): boolean;
   onSyncStatus?(
     projectId: string,
     status: Omit<ISyncStatus, "dirty">,

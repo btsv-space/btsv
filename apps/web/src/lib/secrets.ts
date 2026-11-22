@@ -1,12 +1,13 @@
 import { dbGetGitToken, dbSaveGitToken } from "$lib/db";
 import { deviceLock } from "$lib/stores/device.svelte";
+import { syncStatus } from "$lib/stores/syncStatus.svelte";
 import {
   base64ToBytes,
   bytesToBase64,
   decryptToken,
   encryptToken,
 } from "$lib/crypto";
-import type { ISecretRecord } from "$lib/shared/types";
+import { ESyncState, type ISecretRecord } from "$lib/shared/types";
 
 export async function ensureGitToken(
   projectId: string,
@@ -40,4 +41,8 @@ export async function saveGitToken(
     updatedAt: Date.now(),
   };
   await dbSaveGitToken(secretRecord);
+  syncStatus.setStateAndMsg(projectId, {
+    state: ESyncState.SYNCED,
+    error: null,
+  });
 }

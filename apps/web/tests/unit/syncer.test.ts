@@ -6,6 +6,7 @@ import {
   type TProjectEntry,
 } from "$lib/shared/types";
 import type { ISyncAdapter } from "$lib/shared/types";
+import { GitHubHttpError } from "$lib/sync/api-adapter";
 
 const {
   mockGetDirtyPosts,
@@ -303,7 +304,7 @@ describe("Syncer", () => {
         "proj-1",
         {
           state: "synced",
-          errorMsg: "",
+          error: null,
         },
         false,
       );
@@ -351,7 +352,7 @@ describe("Syncer", () => {
         "proj-1",
         {
           state: "syncing-push",
-          errorMsg: "",
+          error: null,
         },
         null,
       );
@@ -360,7 +361,7 @@ describe("Syncer", () => {
         "proj-1",
         {
           state: "synced",
-          errorMsg: "",
+          error: null,
         },
         null,
       );
@@ -378,10 +379,67 @@ describe("Syncer", () => {
         "proj-1",
         {
           state: "error",
-          errorMsg: "network error",
+          error: { type: null, message: "network error" },
         },
         null,
       );
+    });
+
+    it("classifies 401 as an expired token", async () => {
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost()]);
+      mockAdapterCommitAndPush.mockRejectedValue(
+        new GitHubHttpError(401, "Bad credentials"),
+      );
+
+      syncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        {
+          state: "error",
+          error: { type: "token-invalid", message: "Bad credentials" },
+        },
+        null,
+      );
+    });
+
+    it.each([403, 404])(
+      "classifies HTTP %i as a no-repo-access failure",
+      async (status) => {
+        mockGetDirtyPosts.mockResolvedValue([makeDirtyPost()]);
+        mockAdapterCommitAndPush.mockRejectedValue(
+          new GitHubHttpError(status, "denied"),
+        );
+
+        syncer.start();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(config.onSyncStatus).toHaveBeenCalledWith(
+          "proj-1",
+          {
+            state: "error",
+            error: { type: "no-repo-access", message: "denied" },
+          },
+          null,
+        );
+      },
+    );
+
+    it("skips the automatic loop for a paused project", async () => {
+      const pausedConfig = {
+        ...makeConfig(() => [makeMockProjectEntry()]),
+        isSyncPaused: vi.fn().mockReturnValue(true),
+      };
+      const pausedSyncer = new Syncer(pausedConfig);
+      mockGetDirtyPosts.mockResolvedValue([makeDirtyPost()]);
+
+      pausedSyncer.start();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(pausedConfig.isSyncPaused).toHaveBeenCalledWith("proj-1");
+      expect(mockAdapterCommitAndPush).not.toHaveBeenCalled();
+      pausedSyncer.stop();
     });
 
     it("continues to next post when one fails", async () => {
@@ -816,7 +874,7 @@ describe("Syncer", () => {
       expect(pushSpy).not.toHaveBeenCalled();
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: ESyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, error: null },
         null,
       );
       pushSpy.mockRestore();
@@ -831,7 +889,7 @@ describe("Syncer", () => {
       expect(mockDeletePost).toHaveBeenCalledWith("proj-1", "post-1");
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: ESyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, error: null },
         null,
       );
     });
@@ -855,7 +913,7 @@ describe("Syncer", () => {
       expect(mockDeletePost).toHaveBeenCalledTimes(1);
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: ESyncState.SYNCED, errorMsg: "" },
+        { state: ESyncState.SYNCED, error: null },
         null,
       );
     });
@@ -905,6 +963,21 @@ describe("Syncer", () => {
       expect(mockAdapterCheckRemote).not.toHaveBeenCalled();
       expect(result).toEqual([]);
     });
+
+    it("reports a missing token as no-token", async () => {
+      mockEnsureGitToken.mockResolvedValue("");
+
+      await syncer.pull(makeMockProjectEntry());
+
+      expect(config.onSyncStatus).toHaveBeenCalledWith(
+        "proj-1",
+        {
+          state: "error",
+          error: { type: "no-token", message: "No git token available" },
+        },
+        null,
+      );
+    });
   });
 
   describe("initialPull", () => {
@@ -917,7 +990,7 @@ describe("Syncer", () => {
 
       expect(config.onSyncStatus).toHaveBeenCalledWith(
         "proj-1",
-        { state: "error", errorMsg: "clone failed" },
+        { state: "error", error: { type: null, message: "clone failed" } },
         null,
       );
     });

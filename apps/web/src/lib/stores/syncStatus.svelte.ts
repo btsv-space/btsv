@@ -1,6 +1,10 @@
 import { SvelteMap } from "svelte/reactivity";
 import { dbGetDirtyPosts } from "$lib/db";
-import { ESyncState, type ISyncStatus } from "$lib/shared/types";
+import {
+  ESyncState,
+  type ISyncError,
+  type ISyncStatus,
+} from "$lib/shared/types";
 import { SYNC_STATUS_STORAGE_KEY } from "$lib/shared/constants";
 
 class SyncStatusStore {
@@ -15,7 +19,7 @@ class SyncStatusStore {
     const existing = this.map.get(projectId);
     const entry: ISyncStatus = {
       state: status.state,
-      errorMsg: status.errorMsg,
+      error: status.error ?? null,
       dirty: existing?.dirty ?? false,
     };
     this.map.set(projectId, entry);
@@ -53,7 +57,7 @@ class SyncStatusStore {
       }
       const parsed = JSON.parse(raw) as Record<
         string,
-        Omit<ISyncStatus, "dirty">
+        { state: ESyncState; error?: ISyncError | null }
       >;
       // transient SYNCING_* states do not survive a page refresh:
       // the operation that set them is gone, so we default to SYNCED.
@@ -63,7 +67,7 @@ class SyncStatusStore {
           status.state === ESyncState.SYNCING_PUSH;
         map.set(projectId, {
           state: isSyncing ? ESyncState.SYNCED : status.state,
-          errorMsg: isSyncing ? "" : status.errorMsg,
+          error: isSyncing ? null : (status.error ?? null),
           dirty: false,
         });
         // `dirty` is updated via direct IDB lookup
@@ -85,7 +89,7 @@ class SyncStatusStore {
       const data = Object.fromEntries(
         Array.from(this.map.entries()).map(([pid, e]) => [
           pid,
-          { state: e.state, errorMsg: e.errorMsg },
+          { state: e.state, error: e.error },
         ]),
       );
       localStorage.setItem(SYNC_STATUS_STORAGE_KEY, JSON.stringify(data));

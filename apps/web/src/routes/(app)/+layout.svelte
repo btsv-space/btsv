@@ -32,7 +32,7 @@
           const failed = syncStatus.get(project.id)?.state === ESyncState.ERROR;
           project.status = failed ? "error" : "ready";
           project.error = failed
-            ? (syncStatus.get(project.id)?.errorMsg ?? "Clone failed")
+            ? (syncStatus.get(project.id)?.error?.message ?? "Clone failed")
             : "";
         })
         .catch((err: unknown) => {

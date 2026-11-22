@@ -14,11 +14,13 @@
     type TDraftFilter,
     type TPageFilter,
     type TPostSortField,
+    type TSyncErrorType,
   } from "$lib/shared/types";
   import { POSTS_PAGE_SIZE } from "$lib/shared/constants";
   import { now, formatPostDate } from "$lib/shared/utils";
   import { postsListPrefs } from "$lib/stores/postsListPrefs.svelte";
   import { DEFAULT_LIST_PREFS, isDefaultListPrefs } from "$lib/postsList";
+  import { syncErrorTitle } from "$lib/shared/copy";
   import FloatingButton from "$lib/components/FloatingButton.svelte";
   import EditTokenModal from "$lib/components/EditTokenModal.svelte";
   import LinkDeviceModal from "$lib/components/LinkDeviceModal.svelte";
@@ -32,6 +34,8 @@
     QrCode,
     ArrowDownWideNarrow,
     ArrowUpNarrowWide,
+    TriangleAlert,
+    X,
   } from "@lucide/svelte";
 
   const projectId = page.params.projectId!;
@@ -135,6 +139,32 @@
   let retryError = $state("");
   let editingToken = $state(false);
   let linkingDevice = $state(false);
+  let dismissedError = $state("");
+
+  const projectSyncStatus = $derived(syncStatus.get(projectId));
+
+  const SYNC_ERROR_DETAIL: Record<TSyncErrorType, string> = {
+    "token-invalid": "Sync is paused until you save a new token.",
+    "no-token": "Add a token to sync with GitHub.",
+    "no-repo-access":
+      "It may be deleted or renamed, or the token may lack access to it.",
+  };
+
+  const syncError = $derived.by(() => {
+    const status = projectSyncStatus;
+    if (status?.state !== ESyncState.ERROR || !status.error) return null;
+
+    const { type: errorType, message: errorMessage } = status.error;
+    const key = `${errorType ?? "unknown"}:${errorMessage}`;
+    if (key === dismissedError) return null;
+
+    return {
+      key,
+      title: syncErrorTitle(errorType),
+      detail: errorType ? SYNC_ERROR_DETAIL[errorType] : errorMessage,
+      canFixToken: errorType != null,
+    };
+  });
 
   const projectEntry = $derived(getProject(projectId));
 
@@ -251,6 +281,44 @@
     </button>
   </div>
 {:else if projectEntry.status === "ready"}
+  {#if syncError}
+    <div
+      class="relative mb-6 rounded-md border border-destructive/40 bg-destructive/10 p-3"
+      role="status"
+    >
+      <button
+        class="absolute top-1 right-1 p-1.5 text-muted-foreground hover:text-foreground"
+        aria-label="Dismiss sync error"
+        onclick={() => (dismissedError = syncError?.key ?? "")}
+      >
+        <X class="h-4 w-4" />
+      </button>
+      <div class="flex items-start gap-2.5">
+        <TriangleAlert class="icon shrink-0 text-destructive" />
+        <div class="min-w-0 flex-1">
+          <p class="m-0 font-medium text-destructive">
+            {syncError.title}
+          </p>
+          {#if syncError.detail}
+            <p
+              class="m-0 mt-0.5 text-sm text-muted-foreground break-words line-clamp-3"
+            >
+              {syncError.detail}
+            </p>
+          {/if}
+          {#if syncError.canFixToken}
+            <button
+              class="btn-outline mt-2 w-full text-sm sm:w-auto"
+              onclick={() => (editingToken = true)}
+            >
+              Update token
+            </button>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <div class="-mt-2 mb-4 flex items-center gap-2">
     <button
       class="btn-secondary text-muted-foreground text-sm shrink-0 p-2 px-3 rounded-full"

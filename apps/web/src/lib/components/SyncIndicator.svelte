@@ -1,6 +1,7 @@
 <script lang="ts">
   import { syncStatus } from "$lib/stores/syncStatus.svelte";
   import { ESyncState } from "$lib/shared/types";
+  import { syncErrorTitle } from "$lib/shared/copy";
   import { onMount } from "svelte";
   import { Save } from "@lucide/svelte";
 
@@ -44,7 +45,7 @@
                 : ESyncState.SYNCED,
   );
 
-  let label = $derived(
+  let title = $derived(
     !online
       ? "Offline"
       : effectiveState === ESyncState.SYNCED
@@ -57,13 +58,7 @@
               ? "Loading..."
               : effectiveState === ESyncState.CONFLICT
                 ? "Needs resolution"
-                : "Sync failed",
-  );
-
-  let title = $derived(
-    effectiveState === ESyncState.ERROR
-      ? `${label}: ${status?.errorMsg ?? ""}`
-      : label,
+                : syncErrorTitle(status?.error?.type),
   );
 </script>
 
@@ -71,7 +66,7 @@
   class="inline-flex items-center gap-1.5 text-sm"
   {title}
   role="status"
-  aria-label={label}
+  aria-label={title}
 >
   <span
     class="w-2 h-2 rounded-full shrink-0"

@@ -22,10 +22,20 @@ import {
   type TProjectEntry,
   type TSyncHook,
   type ISyncerConfig,
+  type ISyncError,
+  type TSyncErrorType,
 } from "$lib/shared/types";
+import { GitHubHttpError } from "$lib/sync/api-adapter";
 
 function getNameTag(prefs: IPreferences): string {
   return slugify(prefs.name ?? "") || "unnamed";
+}
+
+function errorTypeFor(err: unknown): TSyncErrorType | null {
+  if (!(err instanceof GitHubHttpError)) return null;
+  if (err.status === 401) return "token-invalid";
+  if (err.status === 403 || err.status === 404) return "no-repo-access";
+  return null;
 }
 
 export class Syncer {
@@ -43,24 +53,31 @@ export class Syncer {
   #setStatus(
     projectId: string,
     state: ESyncState,
-    errorMsg = "",
+    error: ISyncError | null = null,
     dirtyOverride: boolean | null = null,
   ): void {
     this.config.onSyncStatus?.(
       projectId,
-      {
-        state,
-        errorMsg: state === ESyncState.ERROR ? errorMsg : "",
-      },
+      { state, error: state === ESyncState.ERROR ? error : null },
       dirtyOverride,
     );
+  }
+
+  #setError(projectId: string, err: unknown, fallbackMsg: string): void {
+    this.#setStatus(projectId, ESyncState.ERROR, {
+      type: errorTypeFor(err),
+      message: err instanceof Error ? err.message : fallbackMsg,
+    });
   }
 
   async #ensureGitToken(projectId: string): Promise<string | null> {
     const token = await ensureGitToken(projectId);
     if (!token) {
       console.error(`[syncer] no git token for ${projectId}`);
-      this.#setStatus(projectId, ESyncState.ERROR, "No git token available");
+      this.#setStatus(projectId, ESyncState.ERROR, {
+        type: "no-token",
+        message: "No git token available",
+      });
     }
     return token;
   }
@@ -162,11 +179,7 @@ export class Syncer {
           this.#setStatus(project.id, ESyncState.SYNCED);
           return postRecords;
         } catch (err) {
-          this.#setStatus(
-            project.id,
-            ESyncState.ERROR,
-            err instanceof Error ? err.message : "Pull failed",
-          );
+          this.#setError(project.id, err, "Pull failed");
           return [];
         }
       },
@@ -210,11 +223,7 @@ export class Syncer {
           this.#setStatus(project.id, ESyncState.SYNCED);
           return postRecords;
         } catch (err) {
-          this.#setStatus(
-            project.id,
-            ESyncState.ERROR,
-            err instanceof Error ? err.message : "Initial pull failed",
-          );
+          this.#setError(project.id, err, "Initial pull failed");
           throw err;
         }
       },
@@ -229,7 +238,7 @@ export class Syncer {
         const dirty = await dbGetDirtyPosts(project.id);
         if (dirty.length === 0) {
           // we just got dirty from db, can override dirty status
-          this.#setStatus(project.id, ESyncState.SYNCED, "", false);
+          this.#setStatus(project.id, ESyncState.SYNCED, null, false);
           return true;
         }
 
@@ -300,11 +309,7 @@ export class Syncer {
             }
           } catch (err) {
             console.error(`[syncer] ${op} failed for ${post.id}:`, err);
-            this.#setStatus(
-              project.id,
-              ESyncState.ERROR,
-              err instanceof Error ? err.message : `${op} failed`,
-            );
+            this.#setError(project.id, err, `${op} failed`);
             allOk = false;
           }
         }
@@ -454,6 +459,7 @@ export class Syncer {
 
       for (const projectEntry of projectEntries) {
         if (projectEntry.status !== "ready") continue;
+        if (this.config.isSyncPaused?.(projectEntry.id)) continue;
         await this.push(projectEntry);
       }
     } finally {

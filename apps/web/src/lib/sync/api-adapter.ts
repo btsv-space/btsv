@@ -30,7 +30,21 @@ function parseRepoUrl(repoUrl: string): { owner: string; repo: string } {
   return { owner, repo };
 }
 
-class CompareBaseNotFoundError extends Error {}
+export class GitHubHttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "GitHubHttpError";
+    this.status = status;
+  }
+}
+
+class CompareBaseNotFoundError extends GitHubHttpError {
+  constructor(message: string) {
+    super(404, message);
+  }
+}
 
 // TODO: consider whether to use SDK (e.g. @octokit/rest for GitHub)
 export class ApiAdapter implements ISyncAdapter {
@@ -217,12 +231,13 @@ export class ApiAdapter implements ISyncAdapter {
 
     if (compareRes.status === 403) {
       const body = await compareRes.text().catch(() => "");
-      throw new Error(`GitHub compare API failed: 403 ${body}`);
+      throw new GitHubHttpError(403, `GitHub compare API failed: 403 ${body}`);
     }
 
     if (!compareRes.ok) {
       const body = await compareRes.text().catch(() => "");
-      throw new Error(
+      throw new GitHubHttpError(
+        compareRes.status,
         `GitHub compare API failed: ${compareRes.status} ${body}`,
       );
     }
@@ -343,7 +358,10 @@ export class ApiAdapter implements ISyncAdapter {
 
     if (!graphqlRes.ok) {
       const body = await graphqlRes.text();
-      throw new Error(`GraphQL pull failed: ${graphqlRes.status} ${body}`);
+      throw new GitHubHttpError(
+        graphqlRes.status,
+        `GraphQL pull failed: ${graphqlRes.status} ${body}`,
+      );
     }
 
     const json = await graphqlRes.json();
@@ -415,7 +433,10 @@ export class ApiAdapter implements ISyncAdapter {
       if (!existingRes.ok) {
         // File already gone — nothing to delete.
         if (existingRes.status === 404) return null;
-        throw new Error(`GitHub API get failed: ${existingRes.status}`);
+        throw new GitHubHttpError(
+          existingRes.status,
+          `GitHub API get failed: ${existingRes.status}`,
+        );
       }
 
       const existing = await existingRes.json();
@@ -513,7 +534,8 @@ async function withRetryAndBackoff(
     if (res.ok) return res;
     if (res.status !== 409 || attempt === maxAttempts - 1) {
       const errBody = await res.text();
-      throw new Error(
+      throw new GitHubHttpError(
+        res.status,
         `${label} failed (attempt ${attempt + 1}/${maxAttempts}): ${res.status} ${errBody}`,
       );
     }

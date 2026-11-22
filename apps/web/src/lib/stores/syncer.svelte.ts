@@ -21,6 +21,7 @@ export const syncer = new Syncer({
       currentSaver?.projectId === projectId && currentSaver?.postId === postId
     );
   },
+  isSyncPaused: (projectId) => syncStatus.get(projectId)?.error != null,
   onSyncStatus: (projectId, status, dirtyOverride) => {
     syncStatus.setStateAndMsg(projectId, status);
     syncStatus.updateDirty(projectId, dirtyOverride);
